@@ -121,10 +121,14 @@ class TransactionRequest(BaseModel):
     def validate_timestamp(cls, v: datetime) -> datetime:
         """Validate timestamp is not in the future."""
         now = datetime.utcnow()
-        if v > now:
+
+        # Remove timezone info for comparison (convert to naive UTC)
+        v_naive = v.replace(tzinfo=None) if v.tzinfo else v
+
+        if v_naive > now:
             raise ValueError("Timestamp cannot be in the future")
         # Warn if transaction is very old (more than 24 hours)
-        age_hours = (now - v).total_seconds() / 3600
+        age_hours = (now - v_naive).total_seconds() / 3600
         if age_hours > 24:
             # In production, you might want to log this or handle differently
             pass

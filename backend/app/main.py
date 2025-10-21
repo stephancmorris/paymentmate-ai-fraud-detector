@@ -20,7 +20,7 @@ from app.core.exceptions import (
     validation_exception_handler,
     generic_exception_handler
 )
-from app.api.v1 import health
+from app.api.v1 import health, transaction
 
 # Setup logging before anything else
 setup_logging()
@@ -96,8 +96,13 @@ app.include_router(
     tags=["monitoring"]
 )
 
+app.include_router(
+    transaction.router,
+    prefix=settings.api_v1_prefix,
+    tags=["transactions"]
+)
+
 # TODO: Add additional routers as they are developed:
-# app.include_router(transaction.router, prefix=settings.api_v1_prefix)
 # app.include_router(data.router, prefix=settings.api_v1_prefix)
 
 
