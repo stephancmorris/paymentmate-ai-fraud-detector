@@ -143,11 +143,27 @@ async def validation_exception_handler(
     """Handle Pydantic validation errors."""
     request_id = request.state.request_id if hasattr(request.state, "request_id") else None
 
+    # Sanitize error details to ensure JSON serializability
+    sanitized_errors = []
+    for error in exc.errors():
+        sanitized_error = {
+            "loc": list(error.get("loc", [])),
+            "msg": str(error.get("msg", "")),
+            "type": str(error.get("type", ""))
+        }
+        # Only include ctx if it exists and is serializable
+        if "ctx" in error and error["ctx"]:
+            try:
+                sanitized_error["ctx"] = {k: str(v) for k, v in error["ctx"].items()}
+            except (AttributeError, TypeError):
+                pass
+        sanitized_errors.append(sanitized_error)
+
     logger.warning(
         "Validation error",
         extra={
             "request_id": request_id,
-            "errors": exc.errors(),
+            "errors": sanitized_errors,
             "path": request.url.path
         }
     )
@@ -157,7 +173,7 @@ async def validation_exception_handler(
         content=ErrorResponse(
             error="ValidationError",
             message="Request validation failed",
-            detail=exc.errors(),
+            detail=sanitized_errors,
             request_id=request_id
         ).model_dump()
     )
