@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.models.schemas import TransactionRequest, TransactionResponse
 from app.services.scoring_service import ScoringService
+from app.services.history_service import get_history_service
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,10 @@ async def score_transaction(
         # Calculate processing time
         processing_time_ms = (time.time() - start_time) * 1000
         response.processing_time_ms = round(processing_time_ms, 2)
+
+        # Add to transaction history
+        history_service = get_history_service()
+        history_service.add_transaction(transaction, response)
 
         # Log response
         logger.info(
