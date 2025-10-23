@@ -7,8 +7,9 @@ import logging
 from typing import Optional, Literal
 from fastapi import APIRouter, status, Query
 
-from app.models.schemas import HistoryResponse
+from app.models.schemas import HistoryResponse, MetricsResponse
 from app.services.history_service import get_history_service
+from app.services.metrics_service import get_metrics_service
 
 logger = logging.getLogger(__name__)
 
@@ -161,3 +162,63 @@ async def clear_transaction_history() -> None:
     history_service.clear_history()
 
     logger.info("Transaction history cleared")
+
+
+@router.get(
+    "/data/metrics",
+    response_model=MetricsResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["data"],
+    summary="Get system performance metrics",
+    description="Retrieve aggregate performance metrics including precision, recall, F1 score, and transaction statistics"
+)
+async def get_performance_metrics() -> MetricsResponse:
+    """
+    Get system performance metrics.
+
+    Returns aggregate metrics for fraud detection performance including:
+    - Transaction counts (total, allowed, flagged, declined)
+    - Model performance metrics (precision, recall, F1 score)
+    - Business metrics (average score, losses prevented, false positive rate)
+
+    Note: For MVP, precision/recall are simulated based on score distributions.
+    In production, these would be calculated from actual fraud investigation results.
+
+    Returns:
+        MetricsResponse with all performance metrics
+
+    Example Response:
+        ```json
+        {
+            "total_transactions": 1000,
+            "flagged_count": 120,
+            "allowed_count": 850,
+            "declined_count": 30,
+            "precision": 0.85,
+            "recall": 0.78,
+            "f1_score": 0.81,
+            "average_score": 0.23,
+            "losses_prevented": 45000.00,
+            "false_positive_rate": 0.05,
+            "timestamp": "2025-10-22T12:00:00Z"
+        }
+        ```
+    """
+    logger.info("Retrieving performance metrics")
+
+    # Get metrics service
+    metrics_service = get_metrics_service()
+
+    # Get metrics
+    metrics = metrics_service.get_metrics()
+
+    logger.info(
+        "Performance metrics retrieved",
+        extra={
+            "total_transactions": metrics["total_transactions"],
+            "precision": metrics["precision"],
+            "recall": metrics["recall"]
+        }
+    )
+
+    return MetricsResponse(**metrics)
