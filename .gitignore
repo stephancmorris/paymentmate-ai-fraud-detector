@@ -4,6 +4,14 @@ PROJECT_BACKLOG.md
 PROJECT_BACKLOG.csv
 PROGRESS.md
 
+# Story/Task/Epic tracking documents (internal use only)
+**/STORY_*.md
+**/EPIC_*.md
+**/TASK_*.md
+**/*_BREAKDOWN.md
+**/*_COMPLETE.md
+SETUP_COMPLETE.md
+
 # Python
 __pycache__/
 *.py[cod]
