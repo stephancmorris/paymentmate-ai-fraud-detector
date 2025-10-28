@@ -13,6 +13,9 @@ PROGRESS.md
 **/*_COMPLETE.md
 SETUP_COMPLETE.md
 
+# Project explanation documents (internal use)
+ml/Project Explanation - *.md
+
 # Python
 __pycache__/
 *.py[cod]
