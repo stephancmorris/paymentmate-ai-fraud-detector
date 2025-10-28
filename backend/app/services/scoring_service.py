@@ -1,33 +1,51 @@
 """
 Scoring service for fraud detection.
-Implements the core logic for scoring transactions.
+Implements the core logic for scoring transactions using ML model.
 """
 
 import logging
-import random
 import hashlib
 from datetime import datetime
 from typing import Dict, Any
 
 from app.models.schemas import TransactionRequest, TransactionResponse
+from app.services.model_service import get_model_service
 
 logger = logging.getLogger(__name__)
 
 
 class ScoringService:
     """
-    Service for scoring transactions for fraud.
+    Service for scoring transactions for fraud using ML model.
 
-    This is a placeholder implementation that generates mock scores
-    based on heuristics until the ML model is integrated.
+    This service uses the trained XGBoost model to generate fraud scores
+    and make decisions based on configurable thresholds.
     """
 
-    def __init__(self):
-        """Initialize the scoring service."""
-        self.threshold_flag = 0.7  # Score above this triggers FLAG
-        self.threshold_decline = 0.9  # Score above this triggers DECLINE
+    def __init__(self, use_ml_model: bool = True):
+        """
+        Initialize the scoring service.
 
-        logger.info("ScoringService initialized with placeholder logic")
+        Args:
+            use_ml_model: If True, uses ML model for scoring. If False, uses placeholder logic.
+        """
+        self.use_ml_model = use_ml_model
+
+        # Decision thresholds (from model training)
+        self.threshold_flag = 0.5  # Default threshold from training
+        self.threshold_decline = 0.9  # Very high confidence for auto-decline
+
+        # Alternative: Use F1-optimal threshold from model metadata
+        # self.threshold_flag = 0.737  # F1-optimal from training report
+
+        if self.use_ml_model:
+            logger.info(
+                f"ScoringService initialized with ML model\n"
+                f"  FLAG threshold: {self.threshold_flag}\n"
+                f"  DECLINE threshold: {self.threshold_decline}"
+            )
+        else:
+            logger.info("ScoringService initialized with placeholder logic (ML disabled)")
 
     async def score_transaction(
         self,
@@ -35,11 +53,12 @@ class ScoringService:
         request_id: str
     ) -> TransactionResponse:
         """
-        Score a transaction for fraud risk.
+        Score a transaction for fraud risk using ML model.
 
-        This is a placeholder implementation that uses simple heuristics
-        to generate a fraud score. In production, this will be replaced
-        with actual ML model inference.
+        This method:
+        1. Uses the trained XGBoost model to predict fraud probability
+        2. Makes a decision based on configured thresholds
+        3. Generates explanations (placeholder until SHAP integration in Story 2.4)
 
         Args:
             transaction: The transaction to score
@@ -48,26 +67,87 @@ class ScoringService:
         Returns:
             TransactionResponse with score, decision, and explanation
         """
-        # Generate a deterministic but varying score based on transaction attributes
-        score = self._calculate_placeholder_score(transaction)
+        try:
+            # Use ML model for scoring
+            if self.use_ml_model:
+                score, model_info = self._score_with_ml_model(transaction)
+            else:
+                # Fallback to placeholder logic if ML is disabled
+                score = self._calculate_placeholder_score(transaction)
+                model_info = {"model_version": "placeholder_v1.0"}
 
-        # Determine decision based on thresholds
-        decision = self._make_decision(score)
+            # Determine decision based on thresholds
+            decision = self._make_decision(score)
 
-        # Generate transaction ID
-        transaction_id = self._generate_transaction_id(transaction, request_id)
+            # Generate transaction ID
+            transaction_id = self._generate_transaction_id(transaction, request_id)
 
-        # Generate placeholder explanation
-        explanation = self._generate_placeholder_explanation(transaction, score)
+            # Generate explanation (placeholder until Story 2.4 - SHAP integration)
+            explanation = self._generate_placeholder_explanation(transaction, score)
+            explanation["model_version"] = model_info.get("model_version", "unknown")
 
-        return TransactionResponse(
-            transaction_id=transaction_id,
-            score=score,
-            decision=decision,
-            explanation=explanation,
-            timestamp=datetime.utcnow(),
-            processing_time_ms=None  # Will be set by the endpoint
-        )
+            return TransactionResponse(
+                transaction_id=transaction_id,
+                score=score,
+                decision=decision,
+                explanation=explanation,
+                timestamp=datetime.utcnow(),
+                processing_time_ms=None  # Will be set by the endpoint
+            )
+
+        except Exception as e:
+            logger.error(f"Scoring failed: {e}", exc_info=True)
+            # Fallback to safe decision on error
+            return TransactionResponse(
+                transaction_id=self._generate_transaction_id(transaction, request_id),
+                score=0.5,  # Neutral score on error
+                decision="FLAG",  # Conservative: flag for manual review on error
+                explanation={
+                    "error": "Model prediction failed, flagged for manual review",
+                    "top_features": [],
+                    "model_version": "error_fallback"
+                },
+                timestamp=datetime.utcnow(),
+                processing_time_ms=None
+            )
+
+    def _score_with_ml_model(self, transaction: TransactionRequest) -> tuple[float, Dict[str, Any]]:
+        """
+        Score a transaction using the ML model.
+
+        Args:
+            transaction: The transaction to score
+
+        Returns:
+            Tuple of (score, model_info)
+
+        Raises:
+            Exception: If model prediction fails
+        """
+        try:
+            model_service = get_model_service()
+            prediction_result = model_service.predict(transaction)
+
+            score = prediction_result["score"]
+            model_info = {
+                "model_version": prediction_result.get("model_version", "unknown"),
+                "inference_time_ms": prediction_result.get("inference_time_ms", 0),
+                "features_used": prediction_result.get("features_used", 0),
+            }
+
+            logger.debug(
+                f"ML model prediction: score={score:.3f}, "
+                f"inference_time={model_info['inference_time_ms']:.2f}ms"
+            )
+
+            return score, model_info
+
+        except RuntimeError as e:
+            logger.error(f"Model service error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Model prediction failed: {e}", exc_info=True)
+            raise
 
     def _calculate_placeholder_score(self, transaction: TransactionRequest) -> float:
         """

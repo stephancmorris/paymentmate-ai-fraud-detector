@@ -21,6 +21,7 @@ from app.core.exceptions import (
     generic_exception_handler
 )
 from app.api.v1 import health, transaction, data
+from app.services.model_service import initialize_model_service
 
 # Setup logging before anything else
 setup_logging()
@@ -42,10 +43,22 @@ async def lifespan(app: FastAPI):
         }
     )
 
-    # TODO: Initialize services on startup:
-    # - Load ML model
-    # - Connect to feature store (Redis if configured)
-    # - Initialize any caches
+    # Initialize ML model service
+    try:
+        logger.info("Loading ML model...")
+        initialize_model_service()
+        logger.info("✓ ML model loaded successfully")
+    except FileNotFoundError as e:
+        logger.error(f"Model file not found: {e}")
+        logger.warning("Application will start but fraud scoring may not work correctly")
+    except Exception as e:
+        logger.error(f"Failed to load ML model: {e}", exc_info=True)
+        logger.warning("Application will start but fraud scoring may not work correctly")
+
+    # TODO: Initialize additional services:
+    # - Connect to feature store (Redis if configured) - Story 3.1
+    # - Initialize velocity tracking - Story 3.2
+    # - Initialize SHAP explainer - Story 2.4
 
     yield
 
