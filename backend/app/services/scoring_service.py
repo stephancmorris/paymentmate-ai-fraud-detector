@@ -57,24 +57,25 @@ class ScoringService:
 
         This method:
         1. Uses the trained XGBoost model to predict fraud probability
-        2. Makes a decision based on configured thresholds
-        3. Generates explanations (placeholder until SHAP integration in Story 2.4)
+        2. Generates SHAP explanations for the prediction
+        3. Makes a decision based on configured thresholds
 
         Args:
             transaction: The transaction to score
             request_id: Unique request identifier
 
         Returns:
-            TransactionResponse with score, decision, and explanation
+            TransactionResponse with score, decision, and SHAP explanation
         """
         try:
             # Use ML model for scoring
             if self.use_ml_model:
-                score, model_info = self._score_with_ml_model(transaction)
+                score, model_info, shap_explanation = self._score_with_ml_model(transaction)
             else:
                 # Fallback to placeholder logic if ML is disabled
                 score = self._calculate_placeholder_score(transaction)
                 model_info = {"model_version": "placeholder_v1.0"}
+                shap_explanation = []
 
             # Determine decision based on thresholds
             decision = self._make_decision(score)
@@ -82,9 +83,13 @@ class ScoringService:
             # Generate transaction ID
             transaction_id = self._generate_transaction_id(transaction, request_id)
 
-            # Generate explanation (placeholder until Story 2.4 - SHAP integration)
-            explanation = self._generate_placeholder_explanation(transaction, score)
-            explanation["model_version"] = model_info.get("model_version", "unknown")
+            # Build explanation
+            explanation = {
+                "top_features": shap_explanation,
+                "threshold": self.threshold_flag,
+                "model_version": model_info.get("model_version", "unknown"),
+                "explanation_type": "shap"
+            }
 
             return TransactionResponse(
                 transaction_id=transaction_id,
@@ -111,24 +116,35 @@ class ScoringService:
                 processing_time_ms=None
             )
 
-    def _score_with_ml_model(self, transaction: TransactionRequest) -> tuple[float, Dict[str, Any]]:
+    def _score_with_ml_model(self, transaction: TransactionRequest) -> tuple[float, Dict[str, Any], list]:
         """
-        Score a transaction using the ML model.
+        Score a transaction using the ML model and generate SHAP explanations.
 
         Args:
             transaction: The transaction to score
 
         Returns:
-            Tuple of (score, model_info)
+            Tuple of (score, model_info, shap_explanation)
 
         Raises:
             Exception: If model prediction fails
         """
         try:
             model_service = get_model_service()
-            prediction_result = model_service.predict(transaction)
 
+            # Extract features once for both prediction and SHAP
+            features_df = model_service.extract_features(transaction)
+
+            # Make prediction
+            prediction_result = model_service.predict(transaction)
             score = prediction_result["score"]
+
+            # Generate SHAP explanation
+            shap_explanation = model_service.generate_shap_explanation(
+                features_df=features_df,
+                top_n=5
+            )
+
             model_info = {
                 "model_version": prediction_result.get("model_version", "unknown"),
                 "inference_time_ms": prediction_result.get("inference_time_ms", 0),
@@ -137,10 +153,11 @@ class ScoringService:
 
             logger.debug(
                 f"ML model prediction: score={score:.3f}, "
-                f"inference_time={model_info['inference_time_ms']:.2f}ms"
+                f"inference_time={model_info['inference_time_ms']:.2f}ms, "
+                f"SHAP features={len(shap_explanation)}"
             )
 
-            return score, model_info
+            return score, model_info, shap_explanation
 
         except RuntimeError as e:
             logger.error(f"Model service error: {e}")
