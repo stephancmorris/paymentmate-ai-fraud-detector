@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class ScoringService:
     """
-    Service for scoring transactions for fraud using ML model.
+    Service that scores transactions for fraud using ML model.
 
     This service uses the trained XGBoost model to generate fraud scores
     and make decisions based on configurable thresholds.
