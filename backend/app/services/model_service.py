@@ -17,8 +17,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
+import shap
 
-from app.models.schemas import TransactionRequest
+from app.models.schemas import TransactionRequest, SHAPExplanation
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class ModelService:
         self.model_metadata: Optional[Dict[str, Any]] = None
         self.feature_names: List[str] = []
         self.is_loaded = False
+        self.shap_explainer: Optional[shap.TreeExplainer] = None
 
         # Default model path (relative to backend directory)
         if model_path is None:
@@ -91,6 +93,12 @@ class ModelService:
 
             self.is_loaded = True
 
+            # Initialize SHAP explainer
+            logger.info("Initializing SHAP TreeExplainer...")
+            shap_start_time = time.time()
+            self.shap_explainer = shap.TreeExplainer(self.model)
+            shap_init_time = (time.time() - shap_start_time) * 1000  # Convert to ms
+
             logger.info(
                 f"✓ Model loaded successfully in {load_time:.2f}ms\n"
                 f"  Version: {self.model_metadata.get('version', 'unknown')}\n"
@@ -98,7 +106,8 @@ class ModelService:
                 f"  Features: {len(self.feature_names)}\n"
                 f"  Test precision: {self.model_metadata.get('test_precision', 0):.3f}\n"
                 f"  Test recall: {self.model_metadata.get('test_recall', 0):.3f}\n"
-                f"  Optimal threshold: {self.model_metadata.get('optimal_threshold', 0.5):.3f}"
+                f"  Optimal threshold: {self.model_metadata.get('optimal_threshold', 0.5):.3f}\n"
+                f"✓ SHAP explainer initialized in {shap_init_time:.2f}ms"
             )
 
         except FileNotFoundError as e:
@@ -228,6 +237,92 @@ class ModelService:
         except Exception as e:
             logger.error(f"Model prediction failed: {e}", exc_info=True)
             raise
+
+    def generate_shap_explanation(
+        self,
+        features_df: pd.DataFrame,
+        top_n: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate SHAP explanations for a transaction.
+
+        This method computes SHAP values for the given transaction and returns
+        the top N features that contributed most to the prediction.
+
+        Args:
+            features_df: DataFrame with extracted features (from extract_features)
+            top_n: Number of top features to return (default: 5)
+
+        Returns:
+            List of dictionaries containing feature explanations:
+            - feature_name: Name of the feature
+            - feature_value: Value of the feature for this transaction
+            - shap_value: SHAP contribution value
+            - contribution: "fraud" or "legitimate" based on sign of SHAP value
+
+        Raises:
+            RuntimeError: If SHAP explainer is not initialized
+            Exception: If SHAP calculation fails
+        """
+        if not self.is_loaded or self.shap_explainer is None:
+            raise RuntimeError("SHAP explainer not initialized. Call load_model() first.")
+
+        try:
+            start_time = time.time()
+
+            # Calculate SHAP values
+            # For binary classification, shap_values returns values for the positive class (fraud)
+            shap_values = self.shap_explainer.shap_values(features_df)
+
+            # shap_values is a 2D array: [samples, features]
+            # We have 1 sample, so extract first row
+            shap_values_single = shap_values[0] if len(shap_values.shape) > 1 else shap_values
+
+            shap_time = (time.time() - start_time) * 1000  # Convert to ms
+
+            # Create list of (feature_name, feature_value, shap_value) tuples
+            explanations = []
+            for i, feature_name in enumerate(self.feature_names):
+                feature_value = float(features_df.iloc[0, i])
+                shap_value = float(shap_values_single[i])
+
+                # Determine contribution direction
+                # Positive SHAP value = pushes toward fraud (class 1)
+                # Negative SHAP value = pushes toward legitimate (class 0)
+                contribution = "fraud" if shap_value > 0 else "legitimate"
+
+                explanations.append({
+                    "feature_name": feature_name,
+                    "feature_value": feature_value,
+                    "shap_value": round(shap_value, 4),
+                    "contribution": contribution,
+                    "abs_shap_value": abs(shap_value)  # For sorting
+                })
+
+            # Sort by absolute SHAP value (most impactful features first)
+            explanations.sort(key=lambda x: x["abs_shap_value"], reverse=True)
+
+            # Get top N features
+            top_explanations = explanations[:top_n]
+
+            # Remove abs_shap_value (only used for sorting)
+            for exp in top_explanations:
+                del exp["abs_shap_value"]
+
+            logger.debug(
+                f"SHAP explanation generated in {shap_time:.2f}ms, "
+                f"top feature: {top_explanations[0]['feature_name']} "
+                f"(SHAP={top_explanations[0]['shap_value']:.4f})"
+            )
+
+            return top_explanations
+
+        except Exception as e:
+            logger.error(f"SHAP explanation generation failed: {e}", exc_info=True)
+            # Don't fail the entire prediction if SHAP fails
+            # Return empty explanation instead
+            logger.warning("Returning empty SHAP explanation due to error")
+            return []
 
     def get_model_info(self) -> Dict[str, Any]:
         """

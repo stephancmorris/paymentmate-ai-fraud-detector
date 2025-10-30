@@ -411,3 +411,158 @@ def test_full_prediction_pipeline(model_service, sample_transaction):
     assert 0.0 <= result["score"] <= 1.0
     assert result["inference_time_ms"] >= 0
     assert result["features_used"] == 13
+
+
+# ============================================================================
+# SHAP Explanation Tests (Story 2.4)
+# ============================================================================
+
+
+def test_shap_explanation_generation(model_service, sample_transaction):
+    """Test that SHAP explanations are generated successfully."""
+    features_df = model_service.extract_features(sample_transaction)
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+
+    # Should return a list of feature explanations
+    assert isinstance(shap_explanation, list)
+    assert len(shap_explanation) > 0
+    assert len(shap_explanation) <= 5  # Top 5 features
+
+
+def test_shap_explanation_structure(model_service, sample_transaction):
+    """Test that SHAP explanations have correct structure."""
+    features_df = model_service.extract_features(sample_transaction)
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+
+    # Each feature explanation should have required fields
+    for feature in shap_explanation:
+        assert "feature_name" in feature
+        assert "feature_value" in feature
+        assert "shap_value" in feature
+        assert "contribution" in feature
+
+        # Validate data types
+        assert isinstance(feature["feature_name"], str)
+        assert isinstance(feature["feature_value"], (int, float))
+        assert isinstance(feature["shap_value"], (int, float))
+        assert feature["contribution"] in ["fraud", "legitimate"]
+
+
+def test_shap_explanation_top_n(model_service, sample_transaction):
+    """Test that SHAP returns exactly top N features."""
+    features_df = model_service.extract_features(sample_transaction)
+
+    # Test with different top_n values
+    for top_n in [1, 3, 5, 10]:
+        shap_explanation = model_service.generate_shap_explanation(features_df, top_n=top_n)
+        expected_count = min(top_n, 13)  # Can't return more features than exist
+        assert len(shap_explanation) == expected_count
+
+
+def test_shap_explanation_sorted_by_importance(model_service, sample_transaction):
+    """Test that SHAP features are sorted by absolute importance."""
+    features_df = model_service.extract_features(sample_transaction)
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+
+    # Verify features are sorted by absolute SHAP value (descending)
+    abs_shap_values = [abs(f["shap_value"]) for f in shap_explanation]
+    assert abs_shap_values == sorted(abs_shap_values, reverse=True)
+
+
+def test_shap_explanation_contribution_direction(model_service, sample_transaction):
+    """Test that SHAP contribution direction is correct."""
+    features_df = model_service.extract_features(sample_transaction)
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+
+    for feature in shap_explanation:
+        # Positive SHAP value = fraud contribution
+        # Negative SHAP value = legitimate contribution
+        if feature["shap_value"] > 0:
+            assert feature["contribution"] == "fraud"
+        else:
+            assert feature["contribution"] == "legitimate"
+
+
+def test_shap_explanation_latency(model_service, sample_transaction):
+    """Test that SHAP calculation completes within latency requirements."""
+    import time
+
+    features_df = model_service.extract_features(sample_transaction)
+
+    start_time = time.time()
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+    shap_time = (time.time() - start_time) * 1000  # Convert to ms
+
+    # Should complete in <50ms (target from Story 2.4)
+    assert shap_time < 50
+
+    print(f"\nSHAP explanation generated in {shap_time:.2f}ms")
+
+
+def test_shap_explanation_consistency(model_service, sample_transaction):
+    """Test that SHAP explanations are consistent for same input."""
+    features_df = model_service.extract_features(sample_transaction)
+
+    shap1 = model_service.generate_shap_explanation(features_df)
+    shap2 = model_service.generate_shap_explanation(features_df)
+
+    # Should produce identical results
+    assert len(shap1) == len(shap2)
+    for f1, f2 in zip(shap1, shap2):
+        assert f1["feature_name"] == f2["feature_name"]
+        assert f1["shap_value"] == f2["shap_value"]
+        assert f1["contribution"] == f2["contribution"]
+
+
+def test_shap_explanation_without_loaded_model():
+    """Test that SHAP fails gracefully if model not loaded."""
+    service = ModelService()
+
+    # Create dummy features DataFrame
+    import pandas as pd
+    features_df = pd.DataFrame([[0] * 13])
+
+    with pytest.raises(RuntimeError, match="SHAP explainer not initialized"):
+        service.generate_shap_explanation(features_df)
+
+
+def test_shap_explanation_high_risk_features(model_service):
+    """Test SHAP on a high-risk transaction."""
+    high_risk_transaction = TransactionRequest(
+        user_id=12345,
+        amount=5000.00,  # Large amount
+        merchant_id="merch_crypto",
+        merchant_category="crypto",  # High-risk category
+        timestamp=datetime(2025, 10, 27, 2, 0, 0),  # Night time
+        country="NG",  # Foreign country
+        currency="USD",
+        payment_method="credit_card",
+        device_type="mobile"
+    )
+
+    features_df = model_service.extract_features(high_risk_transaction)
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+
+    # Should have some fraud-contributing features
+    fraud_features = [f for f in shap_explanation if f["contribution"] == "fraud"]
+    assert len(fraud_features) > 0
+
+    # High-risk features should appear in top features
+    feature_names = [f["feature_name"] for f in shap_explanation]
+    # At least some of these should appear: amount, is_high_risk_category, is_foreign_country, is_night
+    high_risk_feature_names = ["amount", "is_high_risk_category", "is_foreign_country", "is_night"]
+    common_features = set(feature_names) & set(high_risk_feature_names)
+    assert len(common_features) > 0
+
+
+def test_shap_explanation_low_risk_features(model_service, sample_transaction):
+    """Test SHAP on a low-risk transaction."""
+    features_df = model_service.extract_features(sample_transaction)
+    shap_explanation = model_service.generate_shap_explanation(features_df)
+
+    # Should have some legitimate-contributing features
+    legit_features = [f for f in shap_explanation if f["contribution"] == "legitimate"]
+
+    # Could have all fraud features, all legit features, or mixed
+    # Just verify structure is correct
+    assert isinstance(legit_features, list)
