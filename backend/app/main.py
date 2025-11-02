@@ -22,6 +22,7 @@ from app.core.exceptions import (
 )
 from app.api.v1 import health, transaction, data
 from app.services.model_service import initialize_model_service
+from app.services.feature_store import initialize_feature_store
 
 # Setup logging before anything else
 setup_logging()
@@ -43,6 +44,15 @@ async def lifespan(app: FastAPI):
         }
     )
 
+    # Initialize feature store (in-memory)
+    try:
+        logger.info("Initializing feature store...")
+        initialize_feature_store()
+        logger.info("✓ Feature store initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize feature store: {e}", exc_info=True)
+        logger.warning("Application will start but velocity features may not work")
+
     # Initialize ML model service
     try:
         logger.info("Loading ML model...")
@@ -55,19 +65,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to load ML model: {e}", exc_info=True)
         logger.warning("Application will start but fraud scoring may not work correctly")
 
-    # TODO: Initialize additional services:
-    # - Connect to feature store (Redis if configured) - Story 3.1
-    # - Initialize velocity tracking - Story 3.2
-    # - Initialize SHAP explainer - Story 2.4
-
     yield
 
     # Shutdown
     logger.info(f"Shutting down {settings.app_name}")
-
-    # TODO: Cleanup on shutdown:
-    # - Close feature store connections
-    # - Release resources
 
 
 # Create FastAPI application
