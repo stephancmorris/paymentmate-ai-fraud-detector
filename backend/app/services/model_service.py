@@ -12,6 +12,7 @@ from xgboost import XGBClassifier
 import shap
 
 from app.models.schemas import TransactionRequest
+from app.services.velocity_service import get_velocity_service
 
 logger = logging.getLogger(__name__)
 
@@ -87,21 +88,24 @@ class ModelService:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
         try:
-            # NOTE: Velocity/history features use placeholders until Story 3.x (feature store)
+            # Get real-time velocity features from feature store
+            velocity_service = get_velocity_service()
+            velocity_features = velocity_service.calculate_velocity_features(transaction)
+
             features = {
                 "amount": float(transaction.amount),
                 "amount_vs_avg_ratio": self._calculate_amount_ratio(transaction),
-                "amount_sum_last10": float(transaction.amount),  # Placeholder
-                "user_avg_amount": 100.0,  # Placeholder ($100 avg)
-                "txn_count_5min": 0.0,  # Placeholder (Story 3.2)
-                "txn_count_1hour": 0.0,  # Placeholder (Story 3.2)
+                "amount_sum_last10": velocity_features["amount_sum_last10"],
+                "user_avg_amount": 100.0,  # Placeholder ($100 avg) - Story 3.3
+                "txn_count_5min": velocity_features["txn_count_5min"],
+                "txn_count_1hour": velocity_features["txn_count_1hour"],
                 "hour_of_day": float(transaction.timestamp.hour),
                 "day_of_week": float(transaction.timestamp.weekday()),
                 "is_weekend": float(transaction.timestamp.weekday() >= 5),
                 "is_night": float(transaction.timestamp.hour < 6 or transaction.timestamp.hour >= 22),
                 "is_high_risk_category": self._is_high_risk_category(transaction.merchant_category),
                 "is_foreign_country": self._is_foreign_country(transaction.country),
-                "merchant_txn_count": 1.0,  # Placeholder (Story 3.3)
+                "merchant_txn_count": velocity_features["merchant_txn_count"],
             }
 
             df = pd.DataFrame([features], columns=self.feature_names)

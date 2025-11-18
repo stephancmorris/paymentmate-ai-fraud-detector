@@ -10,6 +10,7 @@ from typing import Dict, Any
 
 from app.models.schemas import TransactionRequest, TransactionResponse
 from app.services.model_service import get_model_service
+from app.services.velocity_service import get_velocity_service
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class ScoringService:
                 "explanation_type": "shap"
             }
 
-            return TransactionResponse(
+            response = TransactionResponse(
                 transaction_id=transaction_id,
                 score=score,
                 decision=decision,
@@ -99,6 +100,16 @@ class ScoringService:
                 timestamp=datetime.utcnow(),
                 processing_time_ms=None  # Will be set by the endpoint
             )
+
+            # Update velocity counters AFTER scoring (for next transaction)
+            try:
+                velocity_service = get_velocity_service()
+                velocity_service.update_velocity_counters(transaction)
+            except Exception as e:
+                logger.error(f"Failed to update velocity counters: {e}", exc_info=True)
+                # Don't fail the transaction if counter update fails
+
+            return response
 
         except Exception as e:
             logger.error(f"Scoring failed: {e}", exc_info=True)

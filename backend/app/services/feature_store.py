@@ -224,6 +224,11 @@ class FeatureKeys:
         return f"user:{user_id}:amount_sum:{window_minutes}m"
 
     @staticmethod
+    def user_amount_list(user_id: int, window_minutes: int = 60) -> str:
+        """User amount list key (e.g., user:12345:amount_list:60m)."""
+        return f"user:{user_id}:amount_list:{window_minutes}m"
+
+    @staticmethod
     def user_transactions(user_id: int) -> str:
         """User transaction history key (e.g., user:12345:transactions)."""
         return f"user:{user_id}:transactions"
