@@ -11,6 +11,7 @@ from typing import Dict, Any
 from app.models.schemas import TransactionRequest, TransactionResponse
 from app.services.model_service import get_model_service
 from app.services.velocity_service import get_velocity_service
+from app.services.behavioral_service import get_behavioral_service
 
 logger = logging.getLogger(__name__)
 
@@ -101,13 +102,16 @@ class ScoringService:
                 processing_time_ms=None  # Will be set by the endpoint
             )
 
-            # Update velocity counters AFTER scoring (for next transaction)
+            # Update velocity counters and behavioral profile AFTER scoring
             try:
                 velocity_service = get_velocity_service()
                 velocity_service.update_velocity_counters(transaction)
+
+                behavioral_service = get_behavioral_service()
+                behavioral_service.update_user_profile(transaction)
             except Exception as e:
-                logger.error(f"Failed to update velocity counters: {e}", exc_info=True)
-                # Don't fail the transaction if counter update fails
+                logger.error(f"Failed to update feature store: {e}", exc_info=True)
+                # Don't fail the transaction if updates fail
 
             return response
 

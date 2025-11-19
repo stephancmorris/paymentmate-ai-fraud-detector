@@ -243,6 +243,11 @@ class FeatureKeys:
         """User profile key (e.g., user:12345:profile)."""
         return f"user:{user_id}:profile"
 
+    @staticmethod
+    def user_avg_amount(user_id: int) -> str:
+        """User average amount key (e.g., user:12345:avg_amount)."""
+        return f"user:{user_id}:avg_amount"
+
 
 # Global singleton instance
 _feature_store: Optional[FeatureStore] = None

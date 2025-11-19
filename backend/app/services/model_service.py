@@ -13,6 +13,7 @@ import shap
 
 from app.models.schemas import TransactionRequest
 from app.services.velocity_service import get_velocity_service
+from app.services.behavioral_service import get_behavioral_service
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +93,15 @@ class ModelService:
             velocity_service = get_velocity_service()
             velocity_features = velocity_service.calculate_velocity_features(transaction)
 
+            # Get behavioral features (user spending profile)
+            behavioral_service = get_behavioral_service()
+            behavioral_features = behavioral_service.calculate_behavioral_features(transaction)
+
             features = {
                 "amount": float(transaction.amount),
-                "amount_vs_avg_ratio": self._calculate_amount_ratio(transaction),
+                "amount_vs_avg_ratio": behavioral_features["amount_vs_avg_ratio"],
                 "amount_sum_last10": velocity_features["amount_sum_last10"],
-                "user_avg_amount": 100.0,  # Placeholder ($100 avg) - Story 3.3
+                "user_avg_amount": behavioral_features["user_avg_amount"],
                 "txn_count_5min": velocity_features["txn_count_5min"],
                 "txn_count_1hour": velocity_features["txn_count_1hour"],
                 "hour_of_day": float(transaction.timestamp.hour),
@@ -220,11 +225,6 @@ class ModelService:
     # ============================================================================
     # Feature engineering helpers
     # ============================================================================
-
-    def _calculate_amount_ratio(self, transaction: TransactionRequest) -> float:
-        """Calculate amount/avg ratio (uses $100 placeholder until Story 3.3)."""
-        user_avg = 100.0  # TODO(Story 3.3): Fetch from feature store
-        return float(transaction.amount) / user_avg if user_avg > 0 else 1.0
 
     def _is_high_risk_category(self, category: str) -> float:
         """Return 1.0 if category in high-risk list, else 0.0."""
