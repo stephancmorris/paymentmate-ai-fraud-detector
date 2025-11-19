@@ -14,6 +14,7 @@ import shap
 from app.models.schemas import TransactionRequest
 from app.services.velocity_service import get_velocity_service
 from app.services.behavioral_service import get_behavioral_service
+from app.services.anomaly_service import get_anomaly_service
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,10 @@ class ModelService:
             # Get behavioral features (user spending profile)
             behavioral_service = get_behavioral_service()
             behavioral_features = behavioral_service.calculate_behavioral_features(transaction)
+
+            # Get anomaly features (geographic and merchant patterns)
+            anomaly_service = get_anomaly_service()
+            anomaly_features = anomaly_service.calculate_anomaly_features(transaction)
 
             features = {
                 "amount": float(transaction.amount),
