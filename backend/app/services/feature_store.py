@@ -248,6 +248,21 @@ class FeatureKeys:
         """User average amount key (e.g., user:12345:avg_amount)."""
         return f"user:{user_id}:avg_amount"
 
+    @staticmethod
+    def user_countries_24h(user_id: int) -> str:
+        """User countries set (24h window) key (e.g., user:12345:countries:24h)."""
+        return f"user:{user_id}:countries:24h"
+
+    @staticmethod
+    def user_merchants_1h(user_id: int) -> str:
+        """User merchants set (1h window) key (e.g., user:12345:merchants:1h)."""
+        return f"user:{user_id}:merchants:1h"
+
+    @staticmethod
+    def user_merchant_history(user_id: int) -> str:
+        """User all-time merchant history key (e.g., user:12345:merchant_history)."""
+        return f"user:{user_id}:merchant_history"
+
 
 # Global singleton instance
 _feature_store: Optional[FeatureStore] = None
