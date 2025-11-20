@@ -85,23 +85,63 @@ class ModelService:
             raise
 
     def extract_features(self, transaction: TransactionRequest) -> pd.DataFrame:
-        """Transform transaction into 13 model features (matches training format)."""
+        """
+        Transform transaction into 13 model features with performance profiling.
+
+        Feature Pipeline:
+        1. Velocity features (txn counts, amounts)
+        2. Behavioral features (user spending profile)
+        3. Anomaly features (geographic, merchant patterns)
+        4. Temporal features (time-based)
+        5. Categorical features (risk flags)
+
+        Returns:
+            DataFrame with features in model-expected order
+        """
         if not self.is_loaded:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
         try:
-            # Get real-time velocity features from feature store
+            pipeline_start = time.time()
+            timing = {}
+
+            # 1. Velocity features (real-time counters)
+            start = time.time()
             velocity_service = get_velocity_service()
             velocity_features = velocity_service.calculate_velocity_features(transaction)
+            timing["velocity_ms"] = (time.time() - start) * 1000
 
-            # Get behavioral features (user spending profile)
+            # 2. Behavioral features (user spending profile)
+            start = time.time()
             behavioral_service = get_behavioral_service()
             behavioral_features = behavioral_service.calculate_behavioral_features(transaction)
+            timing["behavioral_ms"] = (time.time() - start) * 1000
 
-            # Get anomaly features (geographic and merchant patterns)
+            # 3. Anomaly features (geographic and merchant patterns)
+            start = time.time()
             anomaly_service = get_anomaly_service()
             anomaly_features = anomaly_service.calculate_anomaly_features(transaction)
+            timing["anomaly_ms"] = (time.time() - start) * 1000
 
+            # 4. Temporal features (derived from timestamp)
+            start = time.time()
+            temporal_features = {
+                "hour_of_day": float(transaction.timestamp.hour),
+                "day_of_week": float(transaction.timestamp.weekday()),
+                "is_weekend": float(transaction.timestamp.weekday() >= 5),
+                "is_night": float(transaction.timestamp.hour < 6 or transaction.timestamp.hour >= 22),
+            }
+            timing["temporal_ms"] = (time.time() - start) * 1000
+
+            # 5. Categorical features (risk flags)
+            start = time.time()
+            categorical_features = {
+                "is_high_risk_category": self._is_high_risk_category(transaction.merchant_category),
+                "is_foreign_country": self._is_foreign_country(transaction.country),
+            }
+            timing["categorical_ms"] = (time.time() - start) * 1000
+
+            # Combine all features (order must match model training)
             features = {
                 "amount": float(transaction.amount),
                 "amount_vs_avg_ratio": behavioral_features["amount_vs_avg_ratio"],
@@ -109,20 +149,41 @@ class ModelService:
                 "user_avg_amount": behavioral_features["user_avg_amount"],
                 "txn_count_5min": velocity_features["txn_count_5min"],
                 "txn_count_1hour": velocity_features["txn_count_1hour"],
-                "hour_of_day": float(transaction.timestamp.hour),
-                "day_of_week": float(transaction.timestamp.weekday()),
-                "is_weekend": float(transaction.timestamp.weekday() >= 5),
-                "is_night": float(transaction.timestamp.hour < 6 or transaction.timestamp.hour >= 22),
-                "is_high_risk_category": self._is_high_risk_category(transaction.merchant_category),
-                "is_foreign_country": self._is_foreign_country(transaction.country),
+                **temporal_features,
+                **categorical_features,
                 "merchant_txn_count": velocity_features["merchant_txn_count"],
             }
 
+            # Create DataFrame with correct column order
             df = pd.DataFrame([features], columns=self.feature_names)
 
+            # Validate feature vector
             missing_features = set(self.feature_names) - set(df.columns)
             if missing_features:
                 raise ValueError(f"Missing required features: {missing_features}")
+
+            # Check for NaN or infinity values
+            if df.isnull().any().any():
+                raise ValueError(f"Feature vector contains NaN values: {df.isnull().sum()}")
+            if np.isinf(df.values).any():
+                raise ValueError("Feature vector contains infinity values")
+
+            # Calculate total pipeline time
+            timing["total_ms"] = (time.time() - pipeline_start) * 1000
+
+            # Log performance breakdown (DEBUG level)
+            logger.debug(
+                f"Feature extraction timing: "
+                f"velocity={timing['velocity_ms']:.2f}ms, "
+                f"behavioral={timing['behavioral_ms']:.2f}ms, "
+                f"anomaly={timing['anomaly_ms']:.2f}ms, "
+                f"temporal={timing['temporal_ms']:.2f}ms, "
+                f"categorical={timing['categorical_ms']:.2f}ms, "
+                f"total={timing['total_ms']:.2f}ms"
+            )
+
+            # Log feature values (DEBUG level)
+            logger.debug(f"Feature values: {features}")
 
             return df
 
@@ -238,6 +299,8 @@ class ModelService:
 
     def _is_foreign_country(self, country: str) -> float:
         """Return 1.0 if not US, else 0.0 (assumes US domestic)."""
+        if country is None:
+            return 1.0  # Treat missing country as foreign
         return 0.0 if country.upper() == "US" else 1.0
 
 
