@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import ShapChart from '../components/ShapChart';
 import {
   formatCurrency,
   formatTimestamp,
@@ -27,7 +28,7 @@ const styles = {
     borderRadius: '8px',
     padding: '2rem',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    maxWidth: '800px',
+    maxWidth: '900px',
     margin: '0 auto',
   },
   header: {
@@ -62,6 +63,11 @@ const styles = {
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '1rem',
+  },
+  gridThree: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '1rem',
   },
   field: {
@@ -111,6 +117,68 @@ const styles = {
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  modelInfo: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '2rem',
+    marginTop: '1rem',
+    paddingTop: '1rem',
+    borderTop: '1px solid #dee2e6',
+  },
+  modelInfoItem: {
+    textAlign: 'center',
+  },
+  modelInfoValue: {
+    fontSize: '1rem',
+    fontWeight: '600',
+    color: '#333',
+  },
+  modelInfoLabel: {
+    fontSize: '0.7rem',
+    color: '#666',
+    textTransform: 'uppercase',
+  },
+  featureList: {
+    marginTop: '1.5rem',
+    padding: '1rem',
+    backgroundColor: '#fff',
+    borderRadius: '4px',
+    border: '1px solid #dee2e6',
+  },
+  featureListTitle: {
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: '0.75rem',
+  },
+  featureItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.5rem 0',
+    borderBottom: '1px solid #f0f0f0',
+  },
+  featureName: {
+    fontSize: '0.85rem',
+    color: '#333',
+  },
+  featureValue: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  featureActual: {
+    fontSize: '0.85rem',
+    color: '#666',
+    fontFamily: 'monospace',
+  },
+  featureShap: {
+    fontSize: '0.85rem',
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    minWidth: '80px',
+    textAlign: 'right',
+  },
 };
 
 const Investigation = () => {
@@ -133,6 +201,14 @@ const Investigation = () => {
       </div>
     );
   }
+
+  const hasExplanation = transaction.explanation && transaction.explanation.length > 0;
+
+  const formatFeatureName = (name) => {
+    return name
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+  };
 
   return (
     <div style={styles.container}>
@@ -160,6 +236,29 @@ const Investigation = () => {
             {formatScore(transaction.score)}
           </div>
           <div style={styles.scoreLabel}>Fraud Risk Score</div>
+
+          {(transaction.model_version || transaction.inference_time_ms) && (
+            <div style={styles.modelInfo}>
+              {transaction.model_version && (
+                <div style={styles.modelInfoItem}>
+                  <div style={styles.modelInfoValue}>{transaction.model_version}</div>
+                  <div style={styles.modelInfoLabel}>Model Version</div>
+                </div>
+              )}
+              {transaction.inference_time_ms && (
+                <div style={styles.modelInfoItem}>
+                  <div style={styles.modelInfoValue}>{transaction.inference_time_ms.toFixed(2)}ms</div>
+                  <div style={styles.modelInfoLabel}>Inference Time</div>
+                </div>
+              )}
+              {transaction.features_used && (
+                <div style={styles.modelInfoItem}>
+                  <div style={styles.modelInfoValue}>{transaction.features_used}</div>
+                  <div style={styles.modelInfoLabel}>Features Used</div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={styles.section}>
@@ -205,36 +304,48 @@ const Investigation = () => {
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>SHAP Explanation</h3>
           <div style={styles.shapSection}>
-            {transaction.explanation && transaction.explanation.length > 0 ? (
-              <div>
-                {transaction.explanation.map((exp, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      padding: '0.5rem 0',
-                      borderBottom: index < transaction.explanation.length - 1 ? '1px solid #dee2e6' : 'none',
-                    }}
-                  >
-                    <span>{exp.feature_name}</span>
-                    <span
-                      style={{
-                        fontWeight: 'bold',
-                        color: exp.contribution === 'fraud' ? '#dc3545' : '#28a745',
-                      }}
-                    >
-                      {exp.shap_value > 0 ? '+' : ''}
-                      {exp.shap_value.toFixed(4)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            {hasExplanation ? (
+              <>
+                <ShapChart
+                  explanations={transaction.explanation}
+                  title="Top 5 Contributing Features"
+                />
+
+                <div style={styles.featureList}>
+                  <div style={styles.featureListTitle}>Feature Details</div>
+                  {transaction.explanation
+                    .sort((a, b) => Math.abs(b.shap_value) - Math.abs(a.shap_value))
+                    .map((exp, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          ...styles.featureItem,
+                          borderBottom: index < transaction.explanation.length - 1 ? '1px solid #f0f0f0' : 'none',
+                        }}
+                      >
+                        <span style={styles.featureName}>{formatFeatureName(exp.feature_name)}</span>
+                        <div style={styles.featureValue}>
+                          <span style={styles.featureActual}>
+                            Value: {typeof exp.feature_value === 'number' ? exp.feature_value.toFixed(2) : exp.feature_value ?? 'N/A'}
+                          </span>
+                          <span
+                            style={{
+                              ...styles.featureShap,
+                              color: exp.shap_value > 0 ? '#dc3545' : '#28a745',
+                            }}
+                          >
+                            {exp.shap_value > 0 ? '+' : ''}{exp.shap_value.toFixed(4)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </>
             ) : (
               <p style={styles.shapNote}>
-                SHAP explanations will appear here when available.
+                No SHAP explanations available for this transaction.
                 <br />
-                (Coming in Story 4.3)
+                SHAP values are generated when scoring transactions via the API.
               </p>
             )}
           </div>
