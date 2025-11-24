@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import TransactionStream from '../components/TransactionStream';
+import PerformanceMetrics from '../components/PerformanceMetrics';
 
 const styles = {
   container: {
@@ -35,6 +36,8 @@ const Dashboard = () => {
         <h1 style={styles.title}>PaymentMate AI</h1>
         <p style={styles.subtitle}>Real-Time Fraud Detection Dashboard</p>
       </header>
+
+      <PerformanceMetrics pollInterval={10000} />
 
       <TransactionStream limit={100} onTransactionClick={handleTransactionClick} />
     </div>
