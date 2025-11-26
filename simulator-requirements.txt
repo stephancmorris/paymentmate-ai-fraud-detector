@@ -1,0 +1,3 @@
+# PaymentMate AI - Transaction Simulator Requirements
+
+requests>=2.31.0
