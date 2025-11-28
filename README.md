@@ -105,7 +105,7 @@ graph LR
 **False Positive Rate**: 1.56% (only 33 legitimate transactions flagged)
 **False Negative Rate**: 5.87% (missed 22 fraud attempts)
 
-## 🎯 Project Status
+## 🎯 Project Status - as of Nov 28
 
 ### ✅ Completed (Epic 2: ML Model & Explainability)
 
