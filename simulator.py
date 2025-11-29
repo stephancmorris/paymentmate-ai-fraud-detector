@@ -167,7 +167,7 @@ class TransactionGenerator:
 class TransactionSimulator:
     """Simulates transaction flow to the fraud detection API."""
 
-    def __init__(self, api_url: str, rate: float, fraud_percentage: float):
+    def __init__(self, api_url: str, rate: float, fraud_percentage: float, scenario: str = 'mixed'):
         """
         Initialize simulator.
 
@@ -175,10 +175,12 @@ class TransactionSimulator:
             api_url: Base URL of the API (e.g., http://localhost:8000)
             rate: Transactions per second
             fraud_percentage: Percentage of transactions that are fraudulent (0-100)
+            scenario: Fraud scenario type ('mixed', 'velocity', 'large_amount', 'geographic', 'card_testing')
         """
         self.api_url = api_url
         self.rate = rate
         self.fraud_percentage = fraud_percentage / 100.0
+        self.scenario = scenario
         self.generator = TransactionGenerator()
 
         self.stats = {
@@ -190,6 +192,10 @@ class TransactionSimulator:
             'declined': 0,
             'errors': 0,
             'total_latency': 0.0,
+            'velocity_count': 0,
+            'large_amount_count': 0,
+            'geographic_count': 0,
+            'card_testing_count': 0,
         }
 
     def _generate_transaction(self) -> Dict:
@@ -201,21 +207,36 @@ class TransactionSimulator:
             return self.generator.generate_legitimate()
         else:
             self.stats['fraud'] += 1
-            # Random fraud type
-            fraud_type = random.choice([
-                'velocity',
-                'large_amount',
-                'geographic',
-                'card_testing',
-            ])
 
+            # Determine fraud type based on scenario
+            if self.scenario == 'velocity':
+                fraud_type = 'velocity'
+            elif self.scenario == 'large_amount':
+                fraud_type = 'large_amount'
+            elif self.scenario == 'geographic':
+                fraud_type = 'geographic'
+            elif self.scenario == 'card_testing':
+                fraud_type = 'card_testing'
+            else:  # mixed
+                fraud_type = random.choice([
+                    'velocity',
+                    'large_amount',
+                    'geographic',
+                    'card_testing',
+                ])
+
+            # Track fraud type statistics
             if fraud_type == 'velocity':
+                self.stats['velocity_count'] += 1
                 return self.generator.generate_fraud_velocity()
             elif fraud_type == 'large_amount':
+                self.stats['large_amount_count'] += 1
                 return self.generator.generate_fraud_large_amount()
             elif fraud_type == 'geographic':
+                self.stats['geographic_count'] += 1
                 return self.generator.generate_fraud_geographic()
             else:
+                self.stats['card_testing_count'] += 1
                 return self.generator.generate_fraud_card_testing()
 
     def _send_transaction(self, transaction: Dict) -> Optional[Dict]:
@@ -265,7 +286,7 @@ class TransactionSimulator:
             duration_seconds: Run for this many seconds (None = indefinite)
             count: Generate this many transactions (None = indefinite)
         """
-        logger.info(f"Starting simulator: rate={self.rate} TPS, fraud={self.fraud_percentage*100:.1f}%")
+        logger.info(f"Starting simulator: rate={self.rate} TPS, fraud={self.fraud_percentage*100:.1f}%, scenario={self.scenario}")
         logger.info(f"API URL: {self.api_url}")
 
         if duration_seconds:
@@ -306,13 +327,29 @@ class TransactionSimulator:
         logger.info("\n" + "="*60)
         logger.info("SIMULATION STATISTICS")
         logger.info("="*60)
+        logger.info(f"Scenario:               {self.scenario}")
         logger.info(f"Total transactions:     {self.stats['total']}")
         logger.info(f"Legitimate:             {self.stats['legitimate']} ({self.stats['legitimate']/self.stats['total']*100:.1f}%)")
         logger.info(f"Fraudulent:             {self.stats['fraud']} ({self.stats['fraud']/self.stats['total']*100:.1f}%)")
         logger.info(f"")
-        logger.info(f"ALLOW decisions:        {self.stats['allowed']} ({self.stats['allowed']/self.stats['total']*100:.1f}%)")
-        logger.info(f"FLAG decisions:         {self.stats['flagged']} ({self.stats['flagged']/self.stats['total']*100:.1f}%)")
-        logger.info(f"DECLINE decisions:      {self.stats['declined']} ({self.stats['declined']/self.stats['total']*100:.1f}%)")
+
+        # Fraud type breakdown
+        if self.stats['fraud'] > 0:
+            logger.info("FRAUD TYPE BREAKDOWN:")
+            if self.stats['velocity_count'] > 0:
+                logger.info(f"  Velocity attacks:     {self.stats['velocity_count']} ({self.stats['velocity_count']/self.stats['fraud']*100:.1f}% of fraud)")
+            if self.stats['large_amount_count'] > 0:
+                logger.info(f"  Large amounts:        {self.stats['large_amount_count']} ({self.stats['large_amount_count']/self.stats['fraud']*100:.1f}% of fraud)")
+            if self.stats['geographic_count'] > 0:
+                logger.info(f"  Geographic anomalies: {self.stats['geographic_count']} ({self.stats['geographic_count']/self.stats['fraud']*100:.1f}% of fraud)")
+            if self.stats['card_testing_count'] > 0:
+                logger.info(f"  Card testing:         {self.stats['card_testing_count']} ({self.stats['card_testing_count']/self.stats['fraud']*100:.1f}% of fraud)")
+            logger.info(f"")
+
+        logger.info("DECISIONS:")
+        logger.info(f"  ALLOW:                {self.stats['allowed']} ({self.stats['allowed']/self.stats['total']*100:.1f}%)")
+        logger.info(f"  FLAG:                 {self.stats['flagged']} ({self.stats['flagged']/self.stats['total']*100:.1f}%)")
+        logger.info(f"  DECLINE:              {self.stats['declined']} ({self.stats['declined']/self.stats['total']*100:.1f}%)")
         logger.info(f"")
         logger.info(f"Errors:                 {self.stats['errors']}")
         logger.info(f"Average latency:        {avg_latency:.1f}ms")
@@ -327,14 +364,23 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate 100 transactions at 10 TPS with 15% fraud
-  python simulator.py --count 100 --rate 10 --fraud 15
+  # Generate 100 transactions at 10 TPS with 15% fraud (mixed scenarios)
+  python3 simulator.py --count 100 --rate 10 --fraud 15
 
-  # Run for 60 seconds at 5 TPS with 20% fraud
-  python simulator.py --duration 60 --rate 5 --fraud 20
+  # Run velocity attack scenario: 50 rapid transactions at 20 TPS
+  python3 simulator.py --scenario velocity --count 50 --rate 20 --fraud 80
 
-  # Run indefinitely at 1 TPS with 10% fraud
-  python simulator.py --rate 1 --fraud 10
+  # Run large amount scenario: test unusually high transaction amounts
+  python3 simulator.py --scenario large_amount --count 30 --rate 5 --fraud 70
+
+  # Run geographic anomaly scenario: foreign country transactions
+  python3 simulator.py --scenario geographic --count 40 --rate 5 --fraud 60
+
+  # Run card testing scenario: many small transactions
+  python3 simulator.py --scenario card_testing --count 100 --rate 10 --fraud 90
+
+  # Mixed scenario with indefinite run (Ctrl+C to stop)
+  python3 simulator.py --scenario mixed --rate 10 --fraud 15
         """
     )
 
@@ -371,6 +417,12 @@ Examples:
         default='INFO',
         help='Logging level (default: INFO)'
     )
+    parser.add_argument(
+        '--scenario',
+        choices=['mixed', 'velocity', 'large_amount', 'geographic', 'card_testing'],
+        default='mixed',
+        help='Fraud scenario to run (default: mixed)'
+    )
 
     args = parser.parse_args()
 
@@ -391,7 +443,8 @@ Examples:
     simulator = TransactionSimulator(
         api_url=args.api_url,
         rate=args.rate,
-        fraud_percentage=args.fraud
+        fraud_percentage=args.fraud,
+        scenario=args.scenario
     )
 
     simulator.run(duration_seconds=args.duration, count=args.count)
