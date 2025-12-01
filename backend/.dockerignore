@@ -1,0 +1,68 @@
+# PaymentMate AI - Backend Docker Ignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+.cache
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files (copy .env.example manually)
+.env
+*.local
+
+# Logs
+*.log
+logs/
+
+# Documentation (keep in repo, not in image)
+*.md
+!README.md
+
+# Test files
+test_*.py
+tests/
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Scripts (if not needed in container)
+run.sh
+refactor_comments.py
