@@ -2,7 +2,7 @@
 
 **Production-ready ML fraud detection with <5ms latency and SHAP explainability.**
 
-Real-time transaction scoring using XGBoost (91.5% precision, 94.1% recall) with SHAP explanations for every prediction. Built with FastAPI + React for high-performance, interpretable fraud prevention.
+Real-time transaction scoring using XGBoost with SHAP explanations for every prediction. Built with FastAPI + React for high-performance, interpretable fraud prevention.
 
 ## 🚀 Key Features
 
