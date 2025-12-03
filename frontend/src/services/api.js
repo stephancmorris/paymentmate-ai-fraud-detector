@@ -1,7 +1,17 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-const API_VERSION = import.meta.env.VITE_API_VERSION || 'v1';
+// Support both build-time (import.meta.env) and runtime (window._env_) environment variables
+const getEnv = (key, defaultValue) => {
+  // Runtime config (from Docker container)
+  if (window._env_ && window._env_[key]) {
+    return window._env_[key];
+  }
+  // Build-time config (from .env file during development)
+  return import.meta.env[key] || defaultValue;
+};
+
+const API_BASE_URL = getEnv('VITE_API_BASE_URL', 'http://localhost:8000');
+const API_VERSION = getEnv('VITE_API_VERSION', 'v1');
 
 const api = axios.create({
   baseURL: `${API_BASE_URL}/api/${API_VERSION}`,
@@ -13,7 +23,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    if (import.meta.env.VITE_DEBUG === 'true') {
+    if (getEnv('VITE_DEBUG', 'false') === 'true') {
       console.log('API Request:', config);
     }
     return config;
@@ -26,7 +36,7 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    if (import.meta.env.VITE_DEBUG === 'true') {
+    if (getEnv('VITE_DEBUG', 'false') === 'true') {
       console.log('API Response:', response);
     }
     return response;
