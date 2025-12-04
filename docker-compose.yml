@@ -1,0 +1,107 @@
+# PaymentMate AI - Docker Compose Configuration
+# One-command startup for the entire fraud detection system
+
+version: '3.8'
+
+services:
+  # Backend FastAPI Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: paymentmate-ai-backend:latest
+    container_name: paymentmate-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_RELOAD=false
+
+      # Model Configuration
+      - MODEL_PATH=models/fraud_model.pkl
+      - MODEL_VERSION=v1.0.0
+
+      # Feature Store (use Redis if enabled, otherwise in-memory)
+      - FEATURE_STORE_TYPE=${FEATURE_STORE_TYPE:-memory}
+      - REDIS_URL=redis://redis:6379
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=json
+
+      # CORS (allow frontend)
+      - CORS_ORIGINS=http://localhost,http://localhost:80,http://frontend:80
+    volumes:
+      # Mount models directory for hot-reload during development (optional)
+      - ./backend/models:/app/models:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - paymentmate-network
+
+  # Frontend React + Nginx Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: paymentmate-ai-frontend:latest
+    container_name: paymentmate-frontend
+    ports:
+      - "80:80"
+    environment:
+      # Backend API URL (points to backend service)
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_API_VERSION=v1
+      - VITE_POLL_INTERVAL=${POLL_INTERVAL:-2000}
+      - VITE_DEBUG=${DEBUG:-false}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - paymentmate-network
+
+  # Redis Service (Optional - for advanced feature store)
+  redis:
+    image: redis:7-alpine
+    container_name: paymentmate-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      # Persist Redis data (optional for development)
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - paymentmate-network
+
+networks:
+  paymentmate-network:
+    driver: bridge
+    name: paymentmate-network
+
+volumes:
+  redis-data:
+    name: paymentmate-redis-data
