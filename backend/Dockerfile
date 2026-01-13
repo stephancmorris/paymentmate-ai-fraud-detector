@@ -31,8 +31,8 @@ COPY --from=builder /root/.local /home/appuser/.local
 # Copy application code
 COPY app/ ./app/
 
-# Copy model artifacts (if they exist)
-COPY models/ ./models/ 2>/dev/null || echo "No models directory found"
+# Copy model artifacts if they exist (application handles missing models gracefully)
+COPY --chown=appuser:appuser models ./models
 
 # Copy environment configuration
 COPY .env.example .env.example

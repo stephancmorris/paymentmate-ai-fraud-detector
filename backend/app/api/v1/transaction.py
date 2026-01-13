@@ -37,9 +37,7 @@ async def score_transaction(
     request: Request
 ) -> TransactionResponse:
     """
-    Score a transaction for fraud risk.
-
-    This endpoint accepts transaction data, performs fraud detection analysis,
+    Score a transaction for fraud risk, accepting transaction data, performs fraud detection analysis,
     and returns a score (0.0-1.0), decision (ALLOW/FLAG/DECLINE), and
     explainability information.
 
@@ -49,21 +47,6 @@ async def score_transaction(
 
     Returns:
         TransactionResponse: Score, decision, and explanation
-
-    Example:
-        ```json
-        POST /api/v1/transaction/score
-        {
-            "user_id": 12345,
-            "amount": 99.99,
-            "merchant_id": "MERCHANT_001",
-            "merchant_category": "retail",
-            "timestamp": "2025-10-20T14:30:00Z",
-            "currency": "USD",
-            "country": "US",
-            "payment_method": "credit_card"
-        }
-        ```
     """
     # Start timing
     start_time = time.time()
@@ -137,9 +120,7 @@ async def score_transaction(
 )
 async def get_transaction(transaction_id: str) -> Dict[str, Any]:
     """
-    Retrieve a previously scored transaction.
-
-    This endpoint is a placeholder for future functionality to retrieve
+    Retrieve a previously scored transaction. This endpoint is a placeholder for future functionality to retrieve
     historical transaction scores.
 
     Args:

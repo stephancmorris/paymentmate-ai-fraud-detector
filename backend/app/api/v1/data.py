@@ -1,7 +1,4 @@
-"""
-Data and analytics endpoints.
-Provides access to transaction history and system metrics.
-"""
+# Data and analytics endpoints and provides access to transaction history and system metrics.
 
 import logging
 from typing import Optional, Literal
@@ -36,26 +33,8 @@ async def get_transaction_history(
         description="Filter by decision type (ALLOW, FLAG, or DECLINE)"
     )
 ) -> HistoryResponse:
-    """
-    Retrieve transaction history.
+    #Retrieves transaction history. Returns a list of recently scored transactions, ordered by timestamp.
 
-    Returns a list of recently scored transactions, ordered by timestamp
-    (most recent first). Can be filtered by decision type.
-
-    Args:
-        limit: Maximum number of transactions to return (default: 20, max: 100)
-        decision: Optional filter by decision type
-
-    Returns:
-        HistoryResponse with list of transactions and counts
-
-    Example:
-        ```
-        GET /api/v1/data/history?limit=10&decision=FLAG
-        ```
-
-        Returns the 10 most recent flagged transactions.
-    """
     logger.info(
         "Retrieving transaction history",
         extra={
@@ -101,25 +80,8 @@ async def get_transaction_history(
 )
 async def get_history_stats() -> dict:
     """
-    Get transaction history statistics.
-
-    Returns counts of transactions by decision type (ALLOW/FLAG/DECLINE)
-    and total count.
-
-    Returns:
-        Dictionary with transaction counts
-
-    Example Response:
-        ```json
-        {
-            "total": 150,
-            "by_decision": {
-                "ALLOW": 120,
-                "FLAG": 25,
-                "DECLINE": 5
-            }
-        }
-        ```
+    Get transaction history & returns counts of transactions by decision type (ALLOW/FLAG/DECLINE)
+    and total count.Returns: Dictionary with transaction counts
     """
     logger.info("Retrieving transaction history statistics")
 
@@ -144,15 +106,11 @@ async def get_history_stats() -> dict:
     description="Clear all transactions from history. For testing purposes only."
 )
 async def clear_transaction_history() -> None:
-    """
-    Clear all transaction history.
 
-    **Warning**: This deletes all stored transaction history.
-    This endpoint should only be used for testing.
+    #Clear all transaction history. **Warning**: This deletes all stored transaction history.
+    #This endpoint should only be used for testing.
+    # Returns: 204 No Content
 
-    Returns:
-        204 No Content
-    """
     logger.warning("Clearing transaction history (testing endpoint)")
 
     # Get history service
@@ -174,35 +132,10 @@ async def clear_transaction_history() -> None:
 )
 async def get_performance_metrics() -> MetricsResponse:
     """
-    Get system performance metrics.
-
     Returns aggregate metrics for fraud detection performance including:
     - Transaction counts (total, allowed, flagged, declined)
     - Model performance metrics (precision, recall, F1 score)
     - Business metrics (average score, losses prevented, false positive rate)
-
-    Note: For MVP, precision/recall are simulated based on score distributions.
-    In production, these would be calculated from actual fraud investigation results.
-
-    Returns:
-        MetricsResponse with all performance metrics
-
-    Example Response:
-        ```json
-        {
-            "total_transactions": 1000,
-            "flagged_count": 120,
-            "allowed_count": 850,
-            "declined_count": 30,
-            "precision": 0.85,
-            "recall": 0.78,
-            "f1_score": 0.81,
-            "average_score": 0.23,
-            "losses_prevented": 45000.00,
-            "false_positive_rate": 0.05,
-            "timestamp": "2025-10-22T12:00:00Z"
-        }
-        ```
     """
     logger.info("Retrieving performance metrics")
 
