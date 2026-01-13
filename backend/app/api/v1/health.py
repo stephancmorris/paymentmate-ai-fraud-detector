@@ -1,7 +1,4 @@
-"""
-Health check endpoints for service monitoring.
-Provides system status and readiness information.
-"""
+#Health check endpoints for service monitoring.
 
 from datetime import datetime
 from typing import Dict, Any

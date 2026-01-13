@@ -47,10 +47,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware to log request and response information.
-    Includes timing information for performance monitoring.
-    """
+    # Middleware to log request and response information. Includes timing information for performance monitoring.
 
     async def dispatch(
         self,

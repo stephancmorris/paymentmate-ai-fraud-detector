@@ -20,7 +20,7 @@ services:
       - API_RELOAD=false
 
       # Model Configuration
-      - MODEL_PATH=models/fraud_model.pkl
+      - MODEL_PATH=models/fraud_detector.pkl
       - MODEL_VERSION=v1.0.0
 
       # Feature Store (use Redis if enabled, otherwise in-memory)
@@ -31,8 +31,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=json
 
-      # CORS (allow frontend)
-      - CORS_ORIGINS=http://localhost,http://localhost:80,http://frontend:80
+      # CORS (allow frontend) - must be JSON array format for Pydantic
+      - CORS_ORIGINS=["http://localhost","http://localhost:80","http://frontend:80"]
     volumes:
       # Mount models directory for hot-reload during development (optional)
       - ./backend/models:/app/models:ro
@@ -40,11 +40,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     restart: unless-stopped
     networks:
       - paymentmate-network

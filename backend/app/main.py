@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     # Initialize ML model service
     try:
         logger.info("Loading ML model...")
-        initialize_model_service()
+        initialize_model_service(model_path=settings.model_path)
         logger.info("✓ ML model loaded successfully")
     except FileNotFoundError as e:
         logger.error(f"Model file not found: {e}")
