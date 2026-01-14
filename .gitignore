@@ -1,23 +1,8 @@
 # Project documentation files
-SDS.md
-PROJECT_BACKLOG.md
-PROJECT_BACKLOG.csv
-PROGRESS.md
 claude.md
-tickettracker.md
-claudmd.pdf
 
 # Story/Task/Epic tracking documents (internal use only)
-**/STORY_*.md
-**/EPIC_*.md
-**/TASK_*.md
-**/*_BREAKDOWN.md
-**/*_COMPLETE.md
 SETUP_COMPLETE.md
-STARTUP_GUIDE.md
-
-# Project explanation documents (internal use)
-ml/Project Explanation - *.md
 
 # Python
 __pycache__/
