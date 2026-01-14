@@ -202,7 +202,8 @@ const Investigation = () => {
     );
   }
 
-  const hasExplanation = transaction.explanation && transaction.explanation.length > 0;
+  const hasExplanation = transaction.explanation && transaction.explanation.top_features && transaction.explanation.top_features.length > 0;
+  const topFeatures = hasExplanation ? transaction.explanation.top_features : [];
 
   const formatFeatureName = (name) => {
     return name
@@ -302,25 +303,25 @@ const Investigation = () => {
         </div>
 
         <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>SHAP Explanation</h3>
+          <h3 style={styles.sectionTitle}>Scoring Explaination</h3>
           <div style={styles.shapSection}>
             {hasExplanation ? (
               <>
                 <ShapChart
-                  explanations={transaction.explanation}
+                  explanations={topFeatures}
                   title="Top 5 Contributing Features"
                 />
 
                 <div style={styles.featureList}>
                   <div style={styles.featureListTitle}>Feature Details</div>
-                  {transaction.explanation
+                  {topFeatures
                     .sort((a, b) => Math.abs(b.shap_value) - Math.abs(a.shap_value))
                     .map((exp, index) => (
                       <div
                         key={index}
                         style={{
                           ...styles.featureItem,
-                          borderBottom: index < transaction.explanation.length - 1 ? '1px solid #f0f0f0' : 'none',
+                          borderBottom: index < topFeatures.length - 1 ? '1px solid #f0f0f0' : 'none',
                         }}
                       >
                         <span style={styles.featureName}>{formatFeatureName(exp.feature_name)}</span>

@@ -57,10 +57,13 @@ class TransactionHistoryService:
                 user_id=request.user_id,
                 amount=request.amount,
                 merchant_id=request.merchant_id,
+                merchant_category=request.merchant_category,
+                payment_method=request.payment_method,
                 score=response.score,
                 decision=response.decision,
                 timestamp=request.timestamp,
-                country=request.country
+                country=request.country,
+                explanation=response.explanation
             )
 
             # Add to deque (automatically removes oldest if at max_size)

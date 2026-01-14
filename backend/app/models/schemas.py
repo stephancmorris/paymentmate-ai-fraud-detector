@@ -4,7 +4,7 @@ Defines request/response models with validation rules.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional, Literal
+from typing import Dict, List, Optional, Literal, Any
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from decimal import Decimal
 
@@ -238,14 +238,21 @@ class TransactionResponse(BaseModel):
 class TransactionHistoryItem(BaseModel):
     """Single transaction in the history list."""
 
+    model_config = ConfigDict(
+        json_schema_extra={"title": "Transaction History Item"},
+    )
+
     transaction_id: str = Field(..., description="Transaction ID")
     user_id: int = Field(..., description="User ID")
     amount: float = Field(..., description="Transaction amount")
     merchant_id: str = Field(..., description="Merchant ID")
+    merchant_category: Optional[str] = Field(default=None, description="Merchant category")
+    payment_method: Optional[str] = Field(default=None, description="Payment method")
     score: float = Field(..., ge=0.0, le=1.0, description="Fraud score")
     decision: Literal["ALLOW", "FLAG", "DECLINE"] = Field(..., description="Decision")
     timestamp: datetime = Field(..., description="Transaction timestamp")
     country: Optional[str] = Field(default=None, description="Country code")
+    explanation: Optional[Dict[str, Any]] = Field(default=None, description="SHAP explanation")
 
 
 class HistoryResponse(BaseModel):
@@ -310,6 +317,7 @@ class MetricsResponse(BaseModel):
                 "recall": 0.78,
                 "f1_score": 0.81,
                 "average_score": 0.23,
+                "average_latency_ms": 45.2,
                 "losses_prevented": 45000.00,
                 "false_positive_rate": 0.05,
                 "timestamp": "2025-10-20T14:30:00Z"
@@ -369,6 +377,12 @@ class MetricsResponse(BaseModel):
         description="Average fraud score across all transactions",
         ge=0.0,
         le=1.0
+    )
+
+    average_latency_ms: float = Field(
+        default=0.0,
+        description="Average processing time per transaction in milliseconds",
+        ge=0.0
     )
 
     # Business metrics

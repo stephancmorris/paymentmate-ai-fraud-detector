@@ -34,12 +34,19 @@ class MetricsService:
         # Score aggregation
         self._total_score_sum = 0.0
 
+        # Latency tracking
+        self._total_processing_time_ms = 0.0
+
         # Simulated ground truth counters (for MVP)
         # In production, these would come from actual fraud investigations
         self._true_positives = 0  # Correctly identified fraud
         self._false_positives = 0  # Legitimate flagged as fraud
         self._true_negatives = 0  # Correctly identified legitimate
         self._false_negatives = 0  # Fraud that was missed
+
+        # Track actual fraud amounts for losses prevented calculation
+        self._fraud_amount_prevented = 0.0  # Sum of actual fraud transaction amounts caught
+        self._fraud_amount_missed = 0.0  # Sum of actual fraud transaction amounts missed
 
         logger.info("MetricsService initialized")
 
@@ -65,6 +72,10 @@ class MetricsService:
             self._total_transactions += 1
             self._total_score_sum += response.score
 
+            # Track processing time
+            if response.processing_time_ms:
+                self._total_processing_time_ms += response.processing_time_ms
+
             if response.decision == "ALLOW":
                 self._allowed_count += 1
             elif response.decision == "FLAG":
@@ -74,7 +85,7 @@ class MetricsService:
 
             # Simulate ground truth for MVP
             # In production, this would come from actual fraud investigations
-            self._simulate_ground_truth(response.score, response.decision)
+            self._simulate_ground_truth(response.score, response.decision, request.amount)
 
             logger.debug(
                 "Transaction metrics recorded",
@@ -86,7 +97,7 @@ class MetricsService:
                 }
             )
 
-    def _simulate_ground_truth(self, score: float, decision: str) -> None:
+    def _simulate_ground_truth(self, score: float, decision: str, amount: float) -> None:
         """
         Simulate ground truth labels for MVP metrics calculation.
 
@@ -102,6 +113,7 @@ class MetricsService:
         Args:
             score: Fraud probability score
             decision: Decision made (ALLOW/FLAG/DECLINE)
+            amount: Transaction amount
         """
         # Simulate whether this is actual fraud based on score
         # Using deterministic simulation based on score
@@ -111,12 +123,14 @@ class MetricsService:
             # We flagged/declined this transaction
             if is_actual_fraud:
                 self._true_positives += 1  # Correctly caught fraud
+                self._fraud_amount_prevented += amount  # Track actual fraud amount prevented
             else:
                 self._false_positives += 1  # Incorrectly flagged legitimate
         else:
             # We allowed this transaction
             if is_actual_fraud:
                 self._false_negatives += 1  # Missed fraud
+                self._fraud_amount_missed += amount  # Track fraud amount that slipped through
             else:
                 self._true_negatives += 1  # Correctly allowed legitimate
 
@@ -132,23 +146,21 @@ class MetricsService:
         Returns:
             True if simulated as actual fraud, False otherwise
         """
+        import random
+
         # High scores are more likely to be actual fraud
         if score >= 0.85:
-            # 90% of high-score transactions are simulated as actual fraud
             fraud_probability = 0.90
         elif score >= 0.65:
-            # 60% of medium-high scores are simulated as actual fraud
-            fraud_probability = 0.60
+            fraud_probability = 0.70
         elif score >= 0.40:
-            # 30% of medium scores are simulated as actual fraud
-            fraud_probability = 0.30
+            fraud_probability = 0.40
         else:
-            # 5% of low scores are simulated as actual fraud
-            fraud_probability = 0.05
+            fraud_probability = 0.10
 
-        # Deterministic simulation based on score value
-        # This ensures consistent results for same score
-        return (score * 100) % 100 < (fraud_probability * 100)
+        # Use score as seed for deterministic but varied results
+        random.seed(int(score * 1000000))
+        return random.random() < fraud_probability
 
     def get_metrics(self) -> Dict:
         """
@@ -170,6 +182,13 @@ class MetricsService:
                 else 0.0
             )
 
+            # Calculate average latency
+            average_latency_ms = (
+                self._total_processing_time_ms / self._total_transactions
+                if self._total_transactions > 0
+                else 0.0
+            )
+
             # Calculate losses prevented (simulated)
             losses_prevented = self._calculate_losses_prevented()
 
@@ -185,6 +204,7 @@ class MetricsService:
                 "recall": round(recall, 4),
                 "f1_score": round(f1_score, 4),
                 "average_score": round(average_score, 4),
+                "average_latency_ms": round(average_latency_ms, 2),
                 "losses_prevented": round(losses_prevented, 2),
                 "false_positive_rate": round(false_positive_rate, 4),
                 "timestamp": datetime.utcnow()
@@ -237,22 +257,15 @@ class MetricsService:
 
     def _calculate_losses_prevented(self) -> float:
         """
-        Calculate estimated monetary losses prevented.
+        Calculate monetary losses prevented using actual transaction amounts.
 
-        For MVP, this simulates the value by:
-        - Assuming each caught fraud (TP) prevented $500 average loss
-        - Assuming each missed fraud (FN) resulted in $500 average loss
+        Uses the actual transaction amounts for fraud that was caught.
+        In production, this would be based on confirmed fraud investigations.
 
         Returns:
-            Estimated losses prevented in dollars
+            Total amount of fraudulent transactions prevented in dollars
         """
-        # Average fraud transaction amount (simulated)
-        avg_fraud_amount = 500.0
-
-        # Losses prevented = frauds we caught * average amount
-        prevented = self._true_positives * avg_fraud_amount
-
-        return prevented
+        return self._fraud_amount_prevented
 
     def _calculate_false_positive_rate(self) -> float:
         """
@@ -280,10 +293,13 @@ class MetricsService:
             self._flagged_count = 0
             self._declined_count = 0
             self._total_score_sum = 0.0
+            self._total_processing_time_ms = 0.0
             self._true_positives = 0
             self._false_positives = 0
             self._true_negatives = 0
             self._false_negatives = 0
+            self._fraud_amount_prevented = 0.0
+            self._fraud_amount_missed = 0.0
 
             logger.info("Metrics reset to zero")
 

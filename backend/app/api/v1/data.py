@@ -119,7 +119,11 @@ async def clear_transaction_history() -> None:
     # Clear history
     history_service.clear_history()
 
-    logger.info("Transaction history cleared")
+    # Also reset metrics
+    metrics_service = get_metrics_service()
+    metrics_service.reset_metrics()
+
+    logger.info("Transaction history and metrics cleared")
 
 
 @router.get(
