@@ -32,16 +32,13 @@ logger = logging.getLogger(__name__)
 class TransactionGenerator:
     """Generates realistic transaction data."""
 
-    # Merchant categories
     CATEGORIES = [
         'retail', 'grocery', 'restaurant', 'gas_station', 'online',
         'entertainment', 'travel', 'utilities', 'healthcare', 'other'
     ]
 
-    # Countries
     COUNTRIES = ['US', 'CA', 'GB', 'DE', 'FR', 'JP', 'AU', 'BR', 'IN', 'MX']
 
-    # Payment methods
     PAYMENT_METHODS = ['credit_card', 'debit_card', 'digital_wallet']
 
     def __init__(self, num_users: int = 100):
@@ -58,7 +55,7 @@ class TransactionGenerator:
                 'avg_amount': random.uniform(20, 500),
                 'std_amount': random.uniform(10, 100),
                 'typical_category': random.choice(self.CATEGORIES),
-                'home_country': random.choice(self.COUNTRIES[:3]),  # Mostly US, CA, GB
+                'home_country': random.choice(self.COUNTRIES[:3]),
                 'txn_per_day': random.randint(1, 5),
             }
         return profiles
@@ -76,16 +73,13 @@ class TransactionGenerator:
         user_id = random.choice(list(self.user_profiles.keys()))
         profile = self.user_profiles[user_id]
 
-        # Amount follows user's typical spending pattern
         amount = max(1.0, random.gauss(profile['avg_amount'], profile['std_amount']))
 
-        # Merchant category tends toward user's typical
         if random.random() < 0.7:
             category = profile['typical_category']
         else:
             category = random.choice(self.CATEGORIES)
 
-        # Select merchant from category
         category_merchants = [m for m in self.merchant_pool if m.startswith(category)]
         merchant_id = random.choice(category_merchants) if category_merchants else random.choice(self.merchant_pool)
 
@@ -100,7 +94,7 @@ class TransactionGenerator:
         }
 
     def generate_fraud_velocity(self) -> Dict:
-        """Generate a velocity attack transaction (rapid-fire)."""
+        """Generate velocity attack transaction."""
         user_id = random.choice(list(self.user_profiles.keys()))
 
         return {
@@ -114,11 +108,10 @@ class TransactionGenerator:
         }
 
     def generate_fraud_large_amount(self) -> Dict:
-        """Generate an unusually large transaction."""
+        """Generate unusually large transaction."""
         user_id = random.choice(list(self.user_profiles.keys()))
         profile = self.user_profiles[user_id]
 
-        # 10-50x the user's average
         amount = profile['avg_amount'] * random.uniform(10, 50)
 
         return {
@@ -132,11 +125,10 @@ class TransactionGenerator:
         }
 
     def generate_fraud_geographic(self) -> Dict:
-        """Generate a geographic anomaly (foreign country)."""
+        """Generate geographic anomaly transaction."""
         user_id = random.choice(list(self.user_profiles.keys()))
         profile = self.user_profiles[user_id]
 
-        # Use foreign country
         foreign_countries = [c for c in self.COUNTRIES if c != profile['home_country']]
 
         return {
@@ -150,12 +142,12 @@ class TransactionGenerator:
         }
 
     def generate_fraud_card_testing(self) -> Dict:
-        """Generate a card testing transaction (small amount)."""
+        """Generate card testing transaction."""
         user_id = random.choice(list(self.user_profiles.keys()))
 
         return {
             'user_id': user_id,
-            'amount': round(random.uniform(0.50, 5.0), 2),  # Very small
+            'amount': round(random.uniform(0.50, 5.0), 2),
             'merchant_id': random.choice(self.merchant_pool),
             'merchant_category': 'online',
             'timestamp': datetime.utcnow().isoformat() + 'Z',
@@ -199,7 +191,7 @@ class TransactionSimulator:
         }
 
     def _generate_transaction(self) -> Dict:
-        """Generate a transaction (legitimate or fraud)."""
+        """Generate transaction based on fraud percentage."""
         is_fraud = random.random() < self.fraud_percentage
 
         if not is_fraud:
@@ -207,8 +199,6 @@ class TransactionSimulator:
             return self.generator.generate_legitimate()
         else:
             self.stats['fraud'] += 1
-
-            # Determine fraud type based on scenario
             if self.scenario == 'velocity':
                 fraud_type = 'velocity'
             elif self.scenario == 'large_amount':
@@ -217,15 +207,13 @@ class TransactionSimulator:
                 fraud_type = 'geographic'
             elif self.scenario == 'card_testing':
                 fraud_type = 'card_testing'
-            else:  # mixed
+            else:
                 fraud_type = random.choice([
                     'velocity',
                     'large_amount',
                     'geographic',
                     'card_testing',
                 ])
-
-            # Track fraud type statistics
             if fraud_type == 'velocity':
                 self.stats['velocity_count'] += 1
                 return self.generator.generate_fraud_velocity()
@@ -246,7 +234,7 @@ class TransactionSimulator:
         try:
             start_time = time.time()
             response = requests.post(url, json=transaction, timeout=10)
-            latency = (time.time() - start_time) * 1000  # Convert to ms
+            latency = (time.time() - start_time) * 1000
 
             self.stats['total_latency'] += latency
 
@@ -299,18 +287,15 @@ class TransactionSimulator:
 
         try:
             while True:
-                # Check termination conditions
                 if count and self.stats['total'] >= count:
                     break
                 if duration_seconds and (time.time() - start_time) >= duration_seconds:
                     break
 
-                # Generate and send transaction
                 transaction = self._generate_transaction()
                 self.stats['total'] += 1
                 self._send_transaction(transaction)
 
-                # Sleep to maintain rate
                 time.sleep(interval)
 
         except KeyboardInterrupt:
@@ -333,7 +318,6 @@ class TransactionSimulator:
         logger.info(f"Fraudulent:             {self.stats['fraud']} ({self.stats['fraud']/self.stats['total']*100:.1f}%)")
         logger.info(f"")
 
-        # Fraud type breakdown
         if self.stats['fraud'] > 0:
             logger.info("FRAUD TYPE BREAKDOWN:")
             if self.stats['velocity_count'] > 0:
@@ -358,7 +342,6 @@ class TransactionSimulator:
 
 
 def main():
-    """Main entry point."""
     parser = argparse.ArgumentParser(
         description='PaymentMate AI Transaction Simulator',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -426,10 +409,7 @@ Examples:
 
     args = parser.parse_args()
 
-    # Set log level
     logger.setLevel(getattr(logging, args.log_level))
-
-    # Validate arguments
     if args.rate <= 0:
         parser.error("Rate must be greater than 0")
     if not (0 <= args.fraud <= 100):
@@ -439,7 +419,6 @@ Examples:
     if args.count and args.count <= 0:
         parser.error("Count must be greater than 0")
 
-    # Create and run simulator
     simulator = TransactionSimulator(
         api_url=args.api_url,
         rate=args.rate,
