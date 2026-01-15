@@ -1,7 +1,4 @@
-"""
-Main FastAPI application for PaymentMate AI Fraud Detection System.
-Configures middleware, routes, and error handlers.
-"""
+"""Main FastAPI application for PaymentMate AI Fraud Detection System."""
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -24,18 +21,13 @@ from app.api.v1 import health, transaction, data
 from app.services.model_service import initialize_model_service
 from app.services.feature_store import initialize_feature_store
 
-# Setup logging before anything else
 setup_logging()
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan manager.
-    Handles startup and shutdown events.
-    """
-    # Startup
+    """Application lifespan manager for startup and shutdown."""
     logger.info(
         f"Starting {settings.app_name} v{settings.app_version}",
         extra={
@@ -44,7 +36,6 @@ async def lifespan(app: FastAPI):
         }
     )
 
-    # Initialize feature store (in-memory)
     try:
         logger.info("Initializing feature store...")
         initialize_feature_store()
@@ -53,7 +44,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize feature store: {e}", exc_info=True)
         logger.warning("Application will start but velocity features may not work")
 
-    # Initialize ML model service
     try:
         logger.info("Loading ML model...")
         initialize_model_service(model_path=settings.model_path)
@@ -67,11 +57,9 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
     logger.info(f"Shutting down {settings.app_name}")
 
 
-# Create FastAPI application
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -80,8 +68,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-
-# Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -91,19 +77,14 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "X-Process-Time"]
 )
 
-# Add custom middleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
-
-# Register exception handlers
 app.add_exception_handler(PaymentMateException, paymentmate_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
-
-# Include routers
 app.include_router(
     health.router,
     prefix=settings.api_v1_prefix,
@@ -125,9 +106,7 @@ app.include_router(
 
 @app.get("/", tags=["root"])
 async def root():
-    """
-    Root endpoint with basic service information.
-    """
+    """Root endpoint with basic service information."""
     return {
         "service": settings.app_name,
         "version": settings.app_version,

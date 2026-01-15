@@ -23,7 +23,6 @@ class ModelService:
     """Loads XGBoost model and generates fraud predictions with SHAP explanations."""
 
     def __init__(self, model_path: Optional[str] = None):
-        """Initialize with optional custom model path."""
         self.model: Optional[XGBClassifier] = None
         self.model_metadata: Optional[Dict[str, Any]] = None
         self.feature_names: List[str] = []
@@ -61,7 +60,6 @@ class ModelService:
 
             self.is_loaded = True
 
-            # Initialize SHAP explainer (one-time ~36ms cost)
             logger.info("Initializing SHAP TreeExplainer...")
             shap_start_time = time.time()
             self.shap_explainer = shap.TreeExplainer(self.model)
@@ -105,25 +103,21 @@ class ModelService:
             pipeline_start = time.time()
             timing = {}
 
-            # 1. Velocity features (real-time counters)
             start = time.time()
             velocity_service = get_velocity_service()
             velocity_features = velocity_service.calculate_velocity_features(transaction)
             timing["velocity_ms"] = (time.time() - start) * 1000
 
-            # 2. Behavioral features (user spending profile)
             start = time.time()
             behavioral_service = get_behavioral_service()
             behavioral_features = behavioral_service.calculate_behavioral_features(transaction)
             timing["behavioral_ms"] = (time.time() - start) * 1000
 
-            # 3. Anomaly features (geographic and merchant patterns)
             start = time.time()
             anomaly_service = get_anomaly_service()
             anomaly_features = anomaly_service.calculate_anomaly_features(transaction)
             timing["anomaly_ms"] = (time.time() - start) * 1000
 
-            # 4. Temporal features (derived from timestamp)
             start = time.time()
             temporal_features = {
                 "hour_of_day": float(transaction.timestamp.hour),
@@ -133,7 +127,6 @@ class ModelService:
             }
             timing["temporal_ms"] = (time.time() - start) * 1000
 
-            # 5. Categorical features (risk flags)
             start = time.time()
             categorical_features = {
                 "is_high_risk_category": self._is_high_risk_category(transaction.merchant_category),
@@ -141,7 +134,6 @@ class ModelService:
             }
             timing["categorical_ms"] = (time.time() - start) * 1000
 
-            # Combine all features (order must match model training)
             features = {
                 "amount": float(transaction.amount),
                 "amount_vs_avg_ratio": behavioral_features["amount_vs_avg_ratio"],
@@ -154,24 +146,19 @@ class ModelService:
                 "merchant_txn_count": velocity_features["merchant_txn_count"],
             }
 
-            # Create DataFrame with correct column order
             df = pd.DataFrame([features], columns=self.feature_names)
 
-            # Validate feature vector
             missing_features = set(self.feature_names) - set(df.columns)
             if missing_features:
                 raise ValueError(f"Missing required features: {missing_features}")
 
-            # Check for NaN or infinity values
             if df.isnull().any().any():
                 raise ValueError(f"Feature vector contains NaN values: {df.isnull().sum()}")
             if np.isinf(df.values).any():
                 raise ValueError("Feature vector contains infinity values")
 
-            # Calculate total pipeline time
             timing["total_ms"] = (time.time() - pipeline_start) * 1000
 
-            # Log performance breakdown (DEBUG level)
             logger.debug(
                 f"Feature extraction timing: "
                 f"velocity={timing['velocity_ms']:.2f}ms, "
@@ -182,7 +169,6 @@ class ModelService:
                 f"total={timing['total_ms']:.2f}ms"
             )
 
-            # Log feature values (DEBUG level)
             logger.debug(f"Feature values: {features}")
 
             return df
@@ -230,7 +216,6 @@ class ModelService:
         try:
             start_time = time.time()
 
-            # Calculate SHAP values for fraud class
             shap_values = self.shap_explainer.shap_values(features_df)
             shap_values_single = shap_values[0] if len(shap_values.shape) > 1 else shap_values
             shap_time = (time.time() - start_time) * 1000
@@ -240,7 +225,6 @@ class ModelService:
                 feature_value = float(features_df.iloc[0, i])
                 shap_value = float(shap_values_single[i])
 
-                # Positive SHAP → fraud, Negative SHAP → legitimate
                 contribution = "fraud" if shap_value > 0 else "legitimate"
 
                 explanations.append({
@@ -248,14 +232,12 @@ class ModelService:
                     "feature_value": feature_value,
                     "shap_value": round(shap_value, 4),
                     "contribution": contribution,
-                    "abs_shap_value": abs(shap_value)  # For sorting
+                    "abs_shap_value": abs(shap_value)
                 })
 
-            # Sort by impact (largest absolute value first)
             explanations.sort(key=lambda x: x["abs_shap_value"], reverse=True)
             top_explanations = explanations[:top_n]
 
-            # Clean up sorting helper
             for exp in top_explanations:
                 del exp["abs_shap_value"]
 
@@ -269,7 +251,7 @@ class ModelService:
         except Exception as e:
             logger.error(f"SHAP generation failed: {e}", exc_info=True)
             logger.warning("Returning empty SHAP explanation")
-            return []  # Don't crash prediction on SHAP failure
+            return []
 
     def get_model_info(self) -> Dict[str, Any]:
         """Return model metadata (version, metrics, features)."""
@@ -288,19 +270,15 @@ class ModelService:
             "optimal_threshold": self.model_metadata.get("optimal_threshold", 0.5),
         }
 
-    # ============================================================================
-    # Feature engineering helpers
-    # ============================================================================
-
     def _is_high_risk_category(self, category: str) -> float:
         """Return 1.0 if category in high-risk list, else 0.0."""
         high_risk = ["online_gambling", "crypto", "foreign_exchange", "money_transfer", "prepaid_cards"]
         return 1.0 if category.lower() in high_risk else 0.0
 
     def _is_foreign_country(self, country: str) -> float:
-        """Return 1.0 if not US, else 0.0 (assumes US domestic)."""
+        """Return 1.0 if not US, else 0.0."""
         if country is None:
-            return 1.0  # Treat missing country as foreign
+            return 1.0
         return 0.0 if country.upper() == "US" else 1.0
 
 

@@ -18,28 +18,19 @@ logger = logging.getLogger(__name__)
 
 
 class ScoringService:
-    """
-    Service that scores transactions for fraud using ML model.
-
-    This service uses the trained XGBoost model to generate fraud scores
-    and make decisions based on configurable thresholds.
-    """
+    """Score transactions for fraud using ML model."""
 
     def __init__(self, use_ml_model: bool = True):
         """
-        Initialize the scoring service.
+        Initialize scoring service.
 
         Args:
-            use_ml_model: If True, uses ML model for scoring. If False, uses placeholder logic.
+            use_ml_model: If True, uses ML model. If False, uses placeholder logic.
         """
         self.use_ml_model = use_ml_model
 
-        # Decision thresholds (from model training)
-        self.threshold_flag = 0.5  # Default threshold from training
-        self.threshold_decline = 0.9  # Very high confidence for auto-decline
-
-        # Alternative: Use F1-optimal threshold from model metadata
-        # self.threshold_flag = 0.737  # F1-optimal from training report
+        self.threshold_flag = 0.5
+        self.threshold_decline = 0.9
 
         if self.use_ml_model:
             logger.info(
@@ -56,37 +47,27 @@ class ScoringService:
         request_id: str
     ) -> TransactionResponse:
         """
-        Score a transaction for fraud risk using ML model.
-
-        This method:
-        1. Uses the trained XGBoost model to predict fraud probability
-        2. Generates SHAP explanations for the prediction
-        3. Makes a decision based on configured thresholds
+        Score transaction for fraud risk.
 
         Args:
-            transaction: The transaction to score
+            transaction: Transaction to score
             request_id: Unique request identifier
 
         Returns:
             TransactionResponse with score, decision, and SHAP explanation
         """
         try:
-            # Use ML model for scoring
             if self.use_ml_model:
                 score, model_info, shap_explanation = self._score_with_ml_model(transaction)
             else:
-                # Fallback to placeholder logic if ML is disabled
                 score = self._calculate_placeholder_score(transaction)
                 model_info = {"model_version": "placeholder_v1.0"}
                 shap_explanation = []
 
-            # Determine decision based on thresholds
             decision = self._make_decision(score)
 
-            # Generate transaction ID
             transaction_id = self._generate_transaction_id(transaction, request_id)
 
-            # Build explanation
             explanation = {
                 "top_features": shap_explanation,
                 "threshold": self.threshold_flag,
@@ -100,10 +81,9 @@ class ScoringService:
                 decision=decision,
                 explanation=explanation,
                 timestamp=datetime.utcnow(),
-                processing_time_ms=None  # Will be set by the endpoint
+                processing_time_ms=None
             )
 
-            # Update velocity counters, behavioral profile, and anomaly counters AFTER scoring
             try:
                 velocity_service = get_velocity_service()
                 velocity_service.update_velocity_counters(transaction)
@@ -115,17 +95,15 @@ class ScoringService:
                 anomaly_service.update_anomaly_counters(transaction)
             except Exception as e:
                 logger.error(f"Failed to update feature store: {e}", exc_info=True)
-                # Don't fail the transaction if updates fail
 
             return response
 
         except Exception as e:
             logger.error(f"Scoring failed: {e}", exc_info=True)
-            # Fallback to safe decision on error
             return TransactionResponse(
                 transaction_id=self._generate_transaction_id(transaction, request_id),
-                score=0.5,  # Neutral score on error
-                decision="FLAG",  # Conservative: flag for manual review on error
+                score=0.5,
+                decision="FLAG",
                 explanation={
                     "error": "Model prediction failed, flagged for manual review",
                     "top_features": [],
@@ -137,28 +115,22 @@ class ScoringService:
 
     def _score_with_ml_model(self, transaction: TransactionRequest) -> tuple[float, Dict[str, Any], list]:
         """
-        Score a transaction using the ML model and generate SHAP explanations.
+        Score transaction using ML model and generate SHAP explanations.
 
         Args:
-            transaction: The transaction to score
+            transaction: Transaction to score
 
         Returns:
             Tuple of (score, model_info, shap_explanation)
-
-        Raises:
-            Exception: If model prediction fails
         """
         try:
             model_service = get_model_service()
 
-            # Extract features once for both prediction and SHAP
             features_df = model_service.extract_features(transaction)
 
-            # Make prediction
             prediction_result = model_service.predict(transaction)
             score = prediction_result["score"]
 
-            # Generate SHAP explanation
             shap_explanation = model_service.generate_shap_explanation(
                 features_df=features_df,
                 top_n=5
@@ -187,23 +159,15 @@ class ScoringService:
 
     def _calculate_placeholder_score(self, transaction: TransactionRequest) -> float:
         """
-        Calculate a placeholder fraud score based on simple heuristics.
-
-        This uses rule-based logic to simulate fraud scoring until the
-        ML model is integrated:
-        - High amounts are more suspicious
-        - Certain merchant categories are riskier
-        - Add some randomness to simulate real-world variance
+        Calculate placeholder fraud score based on simple heuristics.
 
         Args:
-            transaction: The transaction data
+            transaction: Transaction data
 
         Returns:
             Fraud score between 0.0 and 1.0
         """
         score = 0.0
-
-        # Base score from amount (higher amounts = higher risk)
         if transaction.amount > 1000:
             score += 0.3
         elif transaction.amount > 500:
@@ -211,7 +175,6 @@ class ScoringService:
         elif transaction.amount > 100:
             score += 0.1
 
-        # Merchant category risk
         risky_categories = ["online_gambling", "crypto", "foreign_exchange"]
         medium_risk_categories = ["electronics", "jewelry", "travel"]
 
@@ -220,26 +183,22 @@ class ScoringService:
         elif transaction.merchant_category in medium_risk_categories:
             score += 0.2
 
-        # Add some deterministic "randomness" based on user_id
-        # This ensures the same user gets consistent scores
         user_seed = transaction.user_id % 100 / 100.0
         score += user_seed * 0.3
 
-        # Ensure score is in valid range [0, 1]
         score = max(0.0, min(1.0, score))
 
-        # Round to 2 decimal places
         return round(score, 2)
 
     def _make_decision(self, score: float) -> str:
         """
-        Make a decision based on the fraud score.
+        Make decision based on fraud score.
 
         Args:
-            score: Fraud probability score (0.0 to 1.0)
+            score: Fraud probability (0.0 to 1.0)
 
         Returns:
-            Decision: "ALLOW", "FLAG", or "DECLINE"
+            "ALLOW", "FLAG", or "DECLINE"
         """
         if score >= self.threshold_decline:
             return "DECLINE"
@@ -253,17 +212,7 @@ class ScoringService:
         transaction: TransactionRequest,
         request_id: str
     ) -> str:
-        """
-        Generate a unique transaction ID.
-
-        Args:
-            transaction: Transaction data
-            request_id: Request ID
-
-        Returns:
-            Unique transaction identifier
-        """
-        # Create a hash-based ID from transaction attributes
+        """Generate unique transaction ID."""
         content = f"{transaction.user_id}_{transaction.amount}_{transaction.merchant_id}_{request_id}"
         hash_value = hashlib.sha256(content.encode()).hexdigest()[:12]
         return f"txn_{hash_value}"
@@ -273,23 +222,8 @@ class ScoringService:
         transaction: TransactionRequest,
         score: float
     ) -> Dict[str, Any]:
-        """
-        Generate a placeholder SHAP-style explanation.
-
-        This creates a mock explanation structure that will be replaced
-        with actual SHAP values when the ML model is integrated.
-
-        Args:
-            transaction: Transaction data
-            score: Calculated fraud score
-
-        Returns:
-            Explanation dictionary with top features
-        """
-        # Create placeholder feature explanations
+        """Generate placeholder SHAP-style explanation."""
         top_features = []
-
-        # Amount feature
         if transaction.amount > 500:
             top_features.append({
                 "feature_name": "transaction_amount",
@@ -298,7 +232,6 @@ class ScoringService:
                 "contribution": "fraud"
             })
 
-        # Merchant category feature
         if transaction.merchant_category:
             top_features.append({
                 "feature_name": "merchant_category",
@@ -307,17 +240,15 @@ class ScoringService:
                 "contribution": "fraud" if score > 0.5 else "legitimate"
             })
 
-        # User history feature (placeholder)
         top_features.append({
             "feature_name": "user_velocity_5min",
-            "feature_value": 1.0,  # Placeholder - would come from feature store
+            "feature_value": 1.0,
             "shap_value": round(0.1 * score, 3),
             "contribution": "legitimate"
         })
 
-        # Country risk feature
         if transaction.country:
-            risky_countries = ["NG", "RU", "CN"]  # Example high-risk countries
+            risky_countries = ["NG", "RU", "CN"]
             is_risky = transaction.country in risky_countries
 
             top_features.append({
@@ -327,7 +258,6 @@ class ScoringService:
                 "contribution": "fraud" if is_risky else "legitimate"
             })
 
-        # Payment method feature
         if transaction.payment_method:
             top_features.append({
                 "feature_name": "payment_method",
@@ -336,7 +266,6 @@ class ScoringService:
                 "contribution": "legitimate"
             })
 
-        # Sort by absolute SHAP value and take top 5
         top_features.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
         top_features = top_features[:5]
 

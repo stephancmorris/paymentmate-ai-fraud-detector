@@ -15,22 +15,17 @@ logger = logging.getLogger(__name__)
 
 
 class TransactionHistoryService:
-    """
-    Service for storing and retrieving transaction history.
-
-    Uses an in-memory deque for efficient FIFO storage with automatic
-    size limiting. Thread-safe for concurrent access.
-    """
+    """Store and retrieve transaction history using in-memory deque."""
 
     def __init__(self, max_size: int = 100):
         """
-        Initialize the history service.
+        Initialize history service.
 
         Args:
-            max_size: Maximum number of transactions to store (default: 100)
+            max_size: Maximum transactions to store (default: 100)
         """
         self._history: deque = deque(maxlen=max_size)
-        self._lock = Lock()  # Thread safety for concurrent access
+        self._lock = Lock()
         self._max_size = max_size
 
         logger.info(
@@ -44,14 +39,13 @@ class TransactionHistoryService:
         response: TransactionResponse
     ) -> None:
         """
-        Add a scored transaction to the history.
+        Add scored transaction to history.
 
         Args:
-            request: The original transaction request
-            response: The scoring response
+            request: Original transaction request
+            response: Scoring response
         """
         with self._lock:
-            # Create history item from request and response
             history_item = TransactionHistoryItem(
                 transaction_id=response.transaction_id,
                 user_id=request.user_id,
@@ -66,7 +60,6 @@ class TransactionHistoryService:
                 explanation=response.explanation
             )
 
-            # Add to deque (automatically removes oldest if at max_size)
             self._history.append(history_item)
 
             logger.debug(
@@ -84,30 +77,26 @@ class TransactionHistoryService:
         decision_filter: Optional[Literal["ALLOW", "FLAG", "DECLINE"]] = None
     ) -> List[TransactionHistoryItem]:
         """
-        Retrieve recent transactions from history.
+        Retrieve recent transactions.
 
         Args:
-            limit: Maximum number of transactions to return (default: 20)
-            decision_filter: Optional filter by decision type (ALLOW/FLAG/DECLINE)
+            limit: Max transactions to return (default: 20)
+            decision_filter: Optional filter by decision (ALLOW/FLAG/DECLINE)
 
         Returns:
-            List of transaction history items, most recent first
+            List of transactions, most recent first
         """
         with self._lock:
-            # Convert deque to list (most recent last in deque)
             transactions = list(self._history)
 
-            # Apply decision filter if specified
             if decision_filter:
                 transactions = [
                     t for t in transactions
                     if t.decision == decision_filter
                 ]
 
-            # Sort by timestamp, most recent first
             transactions.sort(key=lambda x: x.timestamp, reverse=True)
 
-            # Apply limit
             transactions = transactions[:limit]
 
             logger.debug(
@@ -123,44 +112,25 @@ class TransactionHistoryService:
             return transactions
 
     def get_all_transactions(self) -> List[TransactionHistoryItem]:
-        """
-        Retrieve all transactions from history.
-
-        Returns:
-            List of all transaction history items, most recent first
-        """
+        """Retrieve all transactions, most recent first."""
         with self._lock:
             transactions = list(self._history)
             transactions.sort(key=lambda x: x.timestamp, reverse=True)
             return transactions
 
     def get_transaction_count(self) -> int:
-        """
-        Get the total number of transactions in history.
-
-        Returns:
-            Count of transactions stored
-        """
+        """Get total number of transactions in history."""
         with self._lock:
             return len(self._history)
 
     def clear_history(self) -> None:
-        """
-        Clear all transactions from history.
-
-        Note: This is primarily for testing purposes.
-        """
+        """Clear all transactions from history."""
         with self._lock:
             self._history.clear()
             logger.info("Transaction history cleared")
 
     def get_decision_counts(self) -> dict:
-        """
-        Get counts of transactions by decision type.
-
-        Returns:
-            Dictionary with counts for ALLOW, FLAG, and DECLINE
-        """
+        """Get transaction counts by decision type."""
         with self._lock:
             transactions = list(self._history)
 
@@ -181,12 +151,7 @@ _history_service: Optional[TransactionHistoryService] = None
 
 
 def get_history_service() -> TransactionHistoryService:
-    """
-    Get the global transaction history service instance.
-
-    Returns:
-        TransactionHistoryService singleton instance
-    """
+    """Get global transaction history service instance."""
     global _history_service
     if _history_service is None:
         _history_service = TransactionHistoryService()

@@ -27,10 +27,9 @@ class FeatureStore:
     """
 
     def __init__(self):
-        """Initialize feature store with thread-safe dict."""
         self._store: Dict[str, FeatureValue] = {}
-        self._lock = threading.RLock()  # Reentrant lock for nested operations
-        self._cleanup_interval = 60  # Cleanup every 60 seconds
+        self._lock = threading.RLock()
+        self._cleanup_interval = 60
         self._last_cleanup = time.time()
         logger.info("FeatureStore initialized")
 
@@ -66,9 +65,8 @@ class FeatureStore:
             if feature is None:
                 return default
 
-            # Check if expired
             if time.time() > feature.expires_at:
-                del self._store[key]  # Clean up expired entry
+                del self._store[key]
                 return default
 
             return feature.value
@@ -111,7 +109,6 @@ class FeatureStore:
 
             current_list.append(value)
 
-            # Trim to max length (keep most recent)
             if len(current_list) > max_length:
                 current_list = current_list[-max_length:]
 
@@ -165,7 +162,7 @@ class FeatureStore:
             }
 
     def clear(self) -> int:
-        """Clear all features (for testing). Returns count of deleted keys."""
+        """Clear all features. Returns count of deleted keys."""
         with self._lock:
             count = len(self._store)
             self._store.clear()
@@ -173,14 +170,12 @@ class FeatureStore:
             return count
 
     def _maybe_cleanup(self) -> None:
-        """Cleanup expired entries if interval elapsed (non-blocking)."""
+        """Cleanup expired entries if interval elapsed."""
         current_time = time.time()
 
-        # Check if cleanup needed (without blocking)
         if current_time - self._last_cleanup < self._cleanup_interval:
             return
 
-        # Run cleanup
         self._last_cleanup = current_time
         expired_keys = [
             key for key, feature in self._store.items()

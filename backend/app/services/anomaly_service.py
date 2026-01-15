@@ -14,7 +14,6 @@ class AnomalyService:
     """Calculate anomaly detection features for geographic and merchant patterns."""
 
     def __init__(self):
-        """Initialize anomaly service."""
         self.feature_store = get_feature_store()
         logger.info("AnomalyService initialized")
 
@@ -31,17 +30,14 @@ class AnomalyService:
         current_country = transaction.country
         current_merchant = transaction.merchant_id
 
-        # Get unique countries in last 24 hours
         countries_key = FeatureKeys.user_countries_24h(user_id)
         countries_set = self.feature_store.get(countries_key, default=set())
         unique_countries = float(len(countries_set))
 
-        # Get unique merchants in last hour
         merchants_key = FeatureKeys.user_merchants_1h(user_id)
         merchants_set = self.feature_store.get(merchants_key, default=set())
         unique_merchants = float(len(merchants_set))
 
-        # Check if this is a new merchant for the user
         merchant_history_key = FeatureKeys.user_merchant_history(user_id)
         merchant_history = self.feature_store.get(merchant_history_key, default=set())
         is_new_merchant = 1.0 if current_merchant not in merchant_history else 0.0
@@ -74,7 +70,6 @@ class AnomalyService:
         current_country = transaction.country
         current_merchant = transaction.merchant_id
 
-        # Update countries set (24-hour window)
         countries_key = FeatureKeys.user_countries_24h(user_id)
         countries_set = self.feature_store.get(countries_key, default=set())
         if not isinstance(countries_set, set):
@@ -83,10 +78,9 @@ class AnomalyService:
         self.feature_store.set(
             countries_key,
             countries_set,
-            ttl_seconds=24 * 3600  # 24 hours
+            ttl_seconds=24 * 3600
         )
 
-        # Update merchants set (1-hour window)
         merchants_key = FeatureKeys.user_merchants_1h(user_id)
         merchants_set = self.feature_store.get(merchants_key, default=set())
         if not isinstance(merchants_set, set):
@@ -95,10 +89,9 @@ class AnomalyService:
         self.feature_store.set(
             merchants_key,
             merchants_set,
-            ttl_seconds=3600  # 1 hour
+            ttl_seconds=3600
         )
 
-        # Update all-time merchant history (30-day window for consistency)
         merchant_history_key = FeatureKeys.user_merchant_history(user_id)
         merchant_history = self.feature_store.get(merchant_history_key, default=set())
         if not isinstance(merchant_history, set):
@@ -107,7 +100,7 @@ class AnomalyService:
         self.feature_store.set(
             merchant_history_key,
             merchant_history,
-            ttl_seconds=30 * 24 * 3600  # 30 days
+            ttl_seconds=30 * 24 * 3600
         )
 
         logger.debug(

@@ -14,7 +14,6 @@ class BehavioralService:
     """Calculate behavioral deviation features using user profiles."""
 
     def __init__(self):
-        """Initialize behavioral service."""
         self.feature_store = get_feature_store()
         logger.info("BehavioralService initialized")
 
@@ -29,13 +28,11 @@ class BehavioralService:
         user_id = transaction.user_id
         current_amount = float(transaction.amount)
 
-        # Get user's average transaction amount (7-day rolling average)
         user_avg = self.feature_store.get(
             FeatureKeys.user_avg_amount(user_id),
-            default=100.0  # Default for new users
+            default=100.0
         )
 
-        # Calculate amount vs average ratio
         amount_ratio = current_amount / user_avg if user_avg > 0 else 1.0
 
         logger.debug(
@@ -50,32 +47,26 @@ class BehavioralService:
 
     def update_user_profile(self, transaction: TransactionRequest) -> None:
         """
-        Update user profile with transaction data (for behavioral learning).
+        Update user profile with transaction data.
 
-        Uses exponential moving average (EMA) for user_avg_amount:
-        new_avg = (old_avg * 0.9) + (current_amount * 0.1)
-
-        Call this AFTER scoring to update profile for next transaction.
+        Uses exponential moving average: new_avg = (old_avg * 0.9) + (current_amount * 0.1)
+        Call AFTER scoring to prevent current transaction from affecting its own features.
         """
         user_id = transaction.user_id
         current_amount = float(transaction.amount)
 
-        # Get current average (default 100.0 for new users)
         current_avg = self.feature_store.get(
             FeatureKeys.user_avg_amount(user_id),
             default=100.0
         )
 
-        # Update using exponential moving average (90% old, 10% new)
-        # This gives more weight to historical behavior
-        alpha = 0.1  # Learning rate (10% weight to new transaction)
+        alpha = 0.1
         new_avg = (current_avg * (1 - alpha)) + (current_amount * alpha)
 
-        # Store updated average (30-day TTL for user profiles)
         self.feature_store.set(
             FeatureKeys.user_avg_amount(user_id),
             new_avg,
-            ttl_seconds=30 * 24 * 3600  # 30 days
+            ttl_seconds=30 * 24 * 3600
         )
 
         logger.debug(

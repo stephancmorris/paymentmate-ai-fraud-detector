@@ -13,7 +13,6 @@ class VelocityService:
     """Calculate real-time velocity features using feature store."""
 
     def __init__(self):
-        """Initialize velocity service."""
         self.feature_store = get_feature_store()
         logger.info("VelocityService initialized")
 
@@ -31,20 +30,16 @@ class VelocityService:
         merchant_id = transaction.merchant_id
         amount = float(transaction.amount)
 
-        # User transaction count (5 minute window)
         txn_5min_key = FeatureKeys.user_txn_count(user_id=user_id, window_minutes=5)
         txn_count_5min = self.feature_store.get(txn_5min_key, default=0)
 
-        # User transaction count (1 hour window)
         txn_1hour_key = FeatureKeys.user_txn_count(user_id=user_id, window_minutes=60)
         txn_count_1hour = self.feature_store.get(txn_1hour_key, default=0)
 
-        # User amount sum (last 10 transactions, 1 hour window)
         amount_list_key = FeatureKeys.user_amount_list(user_id=user_id, window_minutes=60)
         amount_list = self.feature_store.get(amount_list_key, default=[])
         amount_sum_last10 = sum(amount_list) if amount_list else amount
 
-        # Merchant transaction count (5 minute window)
         merchant_5min_key = FeatureKeys.merchant_txn_count(merchant_id=merchant_id, window_minutes=5)
         merchant_txn_count = self.feature_store.get(merchant_5min_key, default=0)
 
@@ -71,19 +66,15 @@ class VelocityService:
         merchant_id = transaction.merchant_id
         amount = float(transaction.amount)
 
-        # Increment user transaction count (5 minute window, 300s TTL)
         txn_5min_key = FeatureKeys.user_txn_count(user_id=user_id, window_minutes=5)
         self.feature_store.increment(txn_5min_key, amount=1, ttl_seconds=300)
 
-        # Increment user transaction count (1 hour window, 3600s TTL)
         txn_1hour_key = FeatureKeys.user_txn_count(user_id=user_id, window_minutes=60)
         self.feature_store.increment(txn_1hour_key, amount=1, ttl_seconds=3600)
 
-        # Add amount to user's transaction history (last 10, 1 hour window)
         amount_list_key = FeatureKeys.user_amount_list(user_id=user_id, window_minutes=60)
         self.feature_store.add_to_list(amount_list_key, value=amount, ttl_seconds=3600, max_length=10)
 
-        # Increment merchant transaction count (5 minute window, 300s TTL)
         merchant_5min_key = FeatureKeys.merchant_txn_count(merchant_id=merchant_id, window_minutes=5)
         self.feature_store.increment(merchant_5min_key, amount=1, ttl_seconds=300)
 
