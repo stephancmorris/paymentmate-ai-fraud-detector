@@ -1,7 +1,4 @@
-"""
-Custom exceptions and error handlers for PaymentMate AI.
-Provides consistent error responses across the API.
-"""
+"""Custom exceptions and error handlers for PaymentMate AI."""
 
 from typing import Any, Dict, Optional
 from fastapi import HTTPException, Request, status
@@ -143,7 +140,6 @@ async def validation_exception_handler(
     """Handle Pydantic validation errors."""
     request_id = request.state.request_id if hasattr(request.state, "request_id") else None
 
-    # Sanitize error details to ensure JSON serializability
     sanitized_errors = []
     for error in exc.errors():
         sanitized_error = {
@@ -151,7 +147,6 @@ async def validation_exception_handler(
             "msg": str(error.get("msg", "")),
             "type": str(error.get("type", ""))
         }
-        # Only include ctx if it exists and is serializable
         if "ctx" in error and error["ctx"]:
             try:
                 sanitized_error["ctx"] = {k: str(v) for k, v in error["ctx"].items()}
